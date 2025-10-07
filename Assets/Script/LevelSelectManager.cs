@@ -5,6 +5,11 @@ using UnityEngine.SceneManagement;
 
 public class LevelSelectManager : MonoBehaviour
 {
+    public void GoToLevelScreen()
+    {
+        // Tải màn chơi dựa trên tên Scene được truyền vào
+        SceneManager.LoadScene("LevelSelectScreen");
+    }
     public void LoadLevel(string levelName)
     {
         // Tải màn chơi dựa trên tên Scene được truyền vào
