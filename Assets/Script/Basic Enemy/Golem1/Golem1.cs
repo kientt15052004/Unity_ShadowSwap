@@ -29,7 +29,8 @@ public class Golem1 : MonoBehaviour
     [SerializeField] private float wallCheckDistance = 0.6f;
     [SerializeField] private float jumpForce = 7f;
     [SerializeField] private LayerMask groundLayer; // Layer của nền đất và tường
-
+    [SerializeField] private Transform groundCheck; // Điểm để kiểm tra mặt đất
+    [SerializeField] private float groundCheckRadius = 0.2f;
     // Components
     private Rigidbody2D rb;
     private Animator anim;
@@ -37,6 +38,7 @@ public class Golem1 : MonoBehaviour
     // State Variables
     private Vector2 leftPatrolPoint, rightPatrolPoint, currentTarget, initialPosition;
     private bool isFacingRight = true;
+    private bool isChasing = false;
 
     void Start()
     {
@@ -63,6 +65,7 @@ public class Golem1 : MonoBehaviour
 
         float distanceToPlayer = Vector2.Distance(transform.position, player.position);
 
+        isChasing = distanceToPlayer <= chaseDistance;
         // Ưu tiên: Tấn công nếu player trong tầm
         if (distanceToPlayer <= attackRange)
         {
@@ -85,9 +88,9 @@ public class Golem1 : MonoBehaviour
     private void FixedUpdate()
     {
         // Kiểm tra tường chỉ khi đang di chuyển (tuần tra hoặc đuổi theo)
-        if (!isDead && !isHurt && rb.velocity.x != 0)
+        if (isChasing && IsGrounded())
         {
-            CheckForWall();
+            CheckForWallAndJump();
         }
     }
 
@@ -133,25 +136,22 @@ public class Golem1 : MonoBehaviour
         rb.velocity = new Vector2(direction.x * speed, rb.velocity.y);
     }
 
-    void CheckForWall()
+    void CheckForWallAndJump()
     {
         Vector2 rayDirection = isFacingRight ? Vector2.right : Vector2.left;
         RaycastHit2D hit = Physics2D.Raycast(transform.position, rayDirection, wallCheckDistance, groundLayer);
 
-        if (hit.collider != null)
+        // Nếu thấy tường và người chơi ở trên cao -> Nhảy
+        if (hit.collider != null && player.position.y > transform.position.y + 0.5f)
         {
-            // Kiểm tra xem có đang ở trên mặt đất không trước khi nhảy
-            if (IsGrounded())
-            {
-                Jump();
-            }
+            Jump();
         }
     }
 
     bool IsGrounded()
     {
-        // Bắn một tia raycast ngắn xuống dưới để kiểm tra mặt đất
-        return Physics2D.Raycast(transform.position, Vector2.down, 1f, groundLayer);
+        // Vẽ một vòng tròn nhỏ ở dưới chân để kiểm tra, đáng tin cậy hơn Raycast
+        return Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
     }
 
     void Jump()
