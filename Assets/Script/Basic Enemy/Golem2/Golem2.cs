@@ -157,6 +157,7 @@ public class Golem2 : MonoBehaviour
 
     void Jump()
     {
+        anim.SetTrigger("Jump");
         rb.velocity = new Vector2(rb.velocity.x, jumpForce);
     }
 
