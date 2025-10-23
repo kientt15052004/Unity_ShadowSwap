@@ -7,6 +7,7 @@ TagManager:
   - Ground
   - Audio
   - Trap
+  - Item
   layers:
   - Default
   - TransparentFX
