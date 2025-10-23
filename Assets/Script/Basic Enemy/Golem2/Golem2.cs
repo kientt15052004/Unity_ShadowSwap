@@ -123,7 +123,6 @@ public class Golem2 : MonoBehaviour
             lastAttackTime = Time.time;
             anim.SetTrigger("Attack"); // Kích hoạt animation tấn công
         }
-        DealDamageToPlayer();
     }
 
     // --- CÁC HÀM HỖ TRỢ ---
@@ -231,13 +230,14 @@ public class Golem2 : MonoBehaviour
         {
             if (playerCollider.CompareTag("Player"))
             {
-                HealthManager healthManager = playerCollider.GetComponent<HealthManager>();
-                if (healthManager != null)
-                {
-                    healthManager.TakeDamage(damage);
-                    // Dừng vòng lặp sau khi gây sát thương cho 1 người chơi
-                    break;
-                }
+                // Giả sử Player có script PlayerHealth
+                //PlayerHealth playerHealth = playerCollider.GetComponent<PlayerHealth>();
+                //if (playerHealth != null)
+                //{
+                //    playerHealth.TakeDamage(damage);
+                //    // Dừng vòng lặp sau khi gây sát thương cho 1 người chơi
+                //    break;
+                //}
             }
         }
     }
