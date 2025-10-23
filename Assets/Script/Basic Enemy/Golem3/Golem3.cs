@@ -230,7 +230,6 @@ public class Golem3 : MonoBehaviour
         {
             if (playerCollider.CompareTag("Player"))
             {
-                //Giả sử Player có script PlayerHealth
                 HealthManager healthManager = playerCollider.GetComponent<HealthManager>();
                 if (healthManager != null)
                 {
