@@ -35,6 +35,17 @@ public class Golem3 : MonoBehaviour
     private Rigidbody2D rb;
     private Animator anim;
 
+    // Sprite renderer for hit flash
+    private SpriteRenderer spriteRenderer;
+    private Color originalColor;
+
+    [Header("Hit Flash Settings")]
+    [SerializeField] private Color hitColor = Color.red;
+    [SerializeField] private float flashDuration = 0.08f;
+    [SerializeField] private int flashCount = 3;
+    private Coroutine flashCoroutine;
+
+
     // State Variables
     private Vector2 leftPatrolPoint, rightPatrolPoint, currentTarget, initialPosition;
     private bool isFacingRight = true;
@@ -45,6 +56,11 @@ public class Golem3 : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
         currentHealth = maxHealth;
+
+        // SpriteRenderer (nếu không tìm thấy, sẽ báo lỗi nhưng vẫn hoạt động)
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+            originalColor = spriteRenderer.color;
 
         // Tự động tìm Player
         FindPlayer();
@@ -188,6 +204,12 @@ public class Golem3 : MonoBehaviour
 
         currentHealth -= damage;
 
+        if (spriteRenderer != null)
+        {
+            if (flashCoroutine != null) StopCoroutine(flashCoroutine);
+            flashCoroutine = StartCoroutine(FlashRoutine());
+        }
+
         if (currentHealth <= 0)
         {
             Die();
@@ -214,6 +236,15 @@ public class Golem3 : MonoBehaviour
         anim.SetTrigger("Death");
         rb.velocity = Vector2.zero;
         GetComponent<Collider2D>().enabled = false; // Tắt va chạm để không cản đường
+
+        // Đặt màu "chết" nếu có spriteRenderer
+        if (spriteRenderer != null)
+        {
+            // dừng flash nếu đang chạy
+            if (flashCoroutine != null) StopCoroutine(flashCoroutine);
+            spriteRenderer.color = Color.gray;
+        }
+
         this.enabled = false; // Tắt script này đi
         Destroy(gameObject, 3f); // Hủy đối tượng sau 3 giây để animation chạy xong
     }
@@ -230,7 +261,6 @@ public class Golem3 : MonoBehaviour
         {
             if (playerCollider.CompareTag("Player"))
             {
-                //Giả sử Player có script PlayerHealth
                 HealthManager healthManager = playerCollider.GetComponent<HealthManager>();
                 if (healthManager != null)
                 {
@@ -254,5 +284,21 @@ public class Golem3 : MonoBehaviour
         Gizmos.color = Color.blue;
         Vector2 rayDirection = isFacingRight ? Vector2.right : Vector2.left;
         Gizmos.DrawLine(transform.position, (Vector2)transform.position + rayDirection * wallCheckDistance);
+    }
+    private IEnumerator FlashRoutine()
+    {
+        if (spriteRenderer == null) yield break;
+
+        for (int i = 0; i < flashCount; i++)
+        {
+            spriteRenderer.color = hitColor;
+            yield return new WaitForSeconds(flashDuration);
+            spriteRenderer.color = originalColor;
+            yield return new WaitForSeconds(flashDuration);
+        }
+
+        // đảm bảo trả về màu gốc
+        spriteRenderer.color = originalColor;
+        flashCoroutine = null;
     }
 }
