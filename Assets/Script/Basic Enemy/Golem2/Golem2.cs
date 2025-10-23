@@ -29,38 +29,20 @@ public class Golem2 : MonoBehaviour
     [SerializeField] private float wallCheckDistance = 0.6f;
     [SerializeField] private float jumpForce = 7f;
     [SerializeField] private LayerMask groundLayer; // Layer của nền đất và tường
-    [SerializeField] private Transform groundCheck; // Điểm để kiểm tra mặt đất
-    [SerializeField] private float groundCheckRadius = 0.2f;
+
     // Components
     private Rigidbody2D rb;
     private Animator anim;
 
-    // Sprite renderer for hit flash
-    private SpriteRenderer spriteRenderer;
-    private Color originalColor;
-
-    [Header("Hit Flash Settings")]
-    [SerializeField] private Color hitColor = Color.red;
-    [SerializeField] private float flashDuration = 0.08f;
-    [SerializeField] private int flashCount = 3;
-    private Coroutine flashCoroutine;
-
-
     // State Variables
     private Vector2 leftPatrolPoint, rightPatrolPoint, currentTarget, initialPosition;
     private bool isFacingRight = true;
-    private bool isChasing = false;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
         currentHealth = maxHealth;
-
-        // SpriteRenderer (nếu không tìm thấy, sẽ báo lỗi nhưng vẫn hoạt động)
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        if (spriteRenderer != null)
-            originalColor = spriteRenderer.color;
 
         // Tự động tìm Player
         FindPlayer();
@@ -81,7 +63,6 @@ public class Golem2 : MonoBehaviour
 
         float distanceToPlayer = Vector2.Distance(transform.position, player.position);
 
-        isChasing = distanceToPlayer <= chaseDistance;
         // Ưu tiên: Tấn công nếu player trong tầm
         if (distanceToPlayer <= attackRange)
         {
@@ -104,9 +85,9 @@ public class Golem2 : MonoBehaviour
     private void FixedUpdate()
     {
         // Kiểm tra tường chỉ khi đang di chuyển (tuần tra hoặc đuổi theo)
-        if (isChasing && IsGrounded())
+        if (!isDead && !isHurt && rb.velocity.x != 0)
         {
-            CheckForWallAndJump();
+            CheckForWall();
         }
     }
 
@@ -153,22 +134,26 @@ public class Golem2 : MonoBehaviour
         rb.velocity = new Vector2(direction.x * speed, rb.velocity.y);
     }
 
-    void CheckForWallAndJump()
+    void CheckForWall()
     {
         Vector2 rayDirection = isFacingRight ? Vector2.right : Vector2.left;
+        Debug.DrawRay(transform.position, rayDirection * wallCheckDistance, Color.red);
         RaycastHit2D hit = Physics2D.Raycast(transform.position, rayDirection, wallCheckDistance, groundLayer);
 
-        // Nếu thấy tường và người chơi ở trên cao -> Nhảy
-        if (hit.collider != null && player.position.y > transform.position.y + 0.5f)
+        if (hit.collider != null)
         {
-            Jump();
+            // Kiểm tra xem có đang ở trên mặt đất không trước khi nhảy
+            if (IsGrounded())
+            {
+                Jump();
+            }
         }
     }
 
     bool IsGrounded()
     {
-        // Vẽ một vòng tròn nhỏ ở dưới chân để kiểm tra, đáng tin cậy hơn Raycast
-        return Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+        // Bắn một tia raycast ngắn xuống dưới để kiểm tra mặt đất
+        return Physics2D.Raycast(transform.position, Vector2.down, 1f, groundLayer);
     }
 
     void Jump()
@@ -204,12 +189,6 @@ public class Golem2 : MonoBehaviour
 
         currentHealth -= damage;
 
-        if (spriteRenderer != null)
-        {
-            if (flashCoroutine != null) StopCoroutine(flashCoroutine);
-            flashCoroutine = StartCoroutine(FlashRoutine());
-        }
-
         if (currentHealth <= 0)
         {
             Die();
@@ -236,15 +215,6 @@ public class Golem2 : MonoBehaviour
         anim.SetTrigger("Death");
         rb.velocity = Vector2.zero;
         GetComponent<Collider2D>().enabled = false; // Tắt va chạm để không cản đường
-
-        // Đặt màu "chết" nếu có spriteRenderer
-        if (spriteRenderer != null)
-        {
-            // dừng flash nếu đang chạy
-            if (flashCoroutine != null) StopCoroutine(flashCoroutine);
-            spriteRenderer.color = Color.gray;
-        }
-
         this.enabled = false; // Tắt script này đi
         Destroy(gameObject, 3f); // Hủy đối tượng sau 3 giây để animation chạy xong
     }
@@ -284,21 +254,5 @@ public class Golem2 : MonoBehaviour
         Gizmos.color = Color.blue;
         Vector2 rayDirection = isFacingRight ? Vector2.right : Vector2.left;
         Gizmos.DrawLine(transform.position, (Vector2)transform.position + rayDirection * wallCheckDistance);
-    }
-    private IEnumerator FlashRoutine()
-    {
-        if (spriteRenderer == null) yield break;
-
-        for (int i = 0; i < flashCount; i++)
-        {
-            spriteRenderer.color = hitColor;
-            yield return new WaitForSeconds(flashDuration);
-            spriteRenderer.color = originalColor;
-            yield return new WaitForSeconds(flashDuration);
-        }
-
-        // đảm bảo trả về màu gốc
-        spriteRenderer.color = originalColor;
-        flashCoroutine = null;
     }
 }
