@@ -92,53 +92,18 @@ public class HealthManager : MonoBehaviour
         isInvincible = false;
     }
 
-    public void Die()
+    private void Die()
     {
         Debug.Log("Nhân vật đã chết!");
 
         StopContinuousDamage();
 
-        // Kích hoạt animation chết
-        if (anim != null)
-        {
-            anim.SetBool("IsDead", true);
-            anim.SetTrigger("Die"); 
-        }
-
-        // Tắt điều khiển
+        // Tắt điều khiển và Collider
         PlayerMove playerMove = GetComponent<PlayerMove>();
         if (playerMove != null) playerMove.enabled = false;
 
-        // Tắt Rigidbody2D (ngừng vật lý)
-        Rigidbody2D rb = GetComponent<Rigidbody2D>();
-        if (rb != null)
-        {
-            rb.velocity = Vector2.zero;
-            rb.simulated = false; // Tắt hoàn toàn vật lý
-        }
-
-        // Tắt Collider
         Collider2D col = GetComponent<Collider2D>();
         if (col != null) col.enabled = false;
-
-        // Respawn sau 2 giây (hoặc reload scene)
-        Invoke("Respawn", 2f);
-    }
-
-    private void Respawn()
-    {
-        // Reload scene
-        UnityEngine.SceneManagement.SceneManager.LoadScene(
-            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
-        );
-
-        // Hồi sinh tại vị trí checkpoint
-        // currentHealth = maxHealth;
-        // UpdateUIAndAnimation();
-        // transform.position = checkpointPosition; // Cần thêm biến checkpointPosition
-        // GetComponent<PlayerMove>().enabled = true;
-        // GetComponent<Rigidbody2D>().simulated = true;
-        // GetComponent<Collider2D>().enabled = true;
     }
 
     // Xử lý sát thương liên tục (Damage Over Time - DOT)
@@ -182,10 +147,4 @@ public class HealthManager : MonoBehaviour
             yield return new WaitForSeconds(1f);
         }
     }
-    //public void InstantDeath()
-    //{
-    //    currentHealth = 0;
-    //    UpdateUIAndAnimation();
-    //    Die();
-    //}
 }
