@@ -14,10 +14,11 @@ public class Golem1 : MonoBehaviour
     private Transform player; // Sẽ được tìm tự động
 
     [Header("Attack Settings")]
-    [SerializeField] private float attackRange = 1.5f;
+    [SerializeField] private float attackRange = 1f;
     [SerializeField] private int damage = 10;
     [SerializeField] private float attackCooldown = 2f;
     private float lastAttackTime;
+    private bool IsAttacking;
 
     [Header("Health & Combat")]
     [SerializeField] private int maxHealth = 100;
@@ -70,19 +71,31 @@ public class Golem1 : MonoBehaviour
         if (distanceToPlayer <= attackRange)
         {
             Attack();
+            IsAttacking = true;
         }
         // Tiếp theo: Đuổi theo nếu player trong tầm nhìn
         else if (distanceToPlayer <= chaseDistance)
         {
             ChasePlayer();
+            IsAttacking = false;
         }
         // Cuối cùng: Tuần tra
         else
         {
             Patrol();
+            IsAttacking = false;
         }
 
         FlipBasedOnVelocity();
+        PlayerMove playerMove = player.GetComponent<PlayerMove>();
+        if (!IsAttacking)
+        {
+            playerMove.SetupMove(5f, 7f);
+        }
+        else
+        {
+            playerMove.SetupMove(4f, 6f);
+        }
     }
 
     private void FixedUpdate()
