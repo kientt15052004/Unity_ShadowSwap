@@ -19,6 +19,7 @@ public class Golem1 : MonoBehaviour
     [SerializeField] private float attackCooldown = 2f;
     private float lastAttackTime;
     private bool IsAttacking;
+    private bool prevAttack;
 
     [Header("Health & Combat")]
     [SerializeField] private int maxHealth = 100;
@@ -46,6 +47,8 @@ public class Golem1 : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
         currentHealth = maxHealth;
+
+        prevAttack = false;
 
         // Tự động tìm Player
         FindPlayer();
@@ -88,13 +91,17 @@ public class Golem1 : MonoBehaviour
 
         FlipBasedOnVelocity();
         PlayerMove playerMove = player.GetComponent<PlayerMove>();
-        if (!IsAttacking)
+        if (playerMove != null && prevAttack!=IsAttacking)
         {
-            playerMove.SetupMove(5f, 7f);
-        }
-        else
-        {
-            playerMove.SetupMove(4f, 6f);
+            if (!IsAttacking)
+            {
+                playerMove.SetupMove(5f, 7f);
+            }
+            else
+            {
+                playerMove.SetupMove(4f, 6f);
+            }
+            prevAttack = IsAttacking;
         }
     }
 
@@ -223,6 +230,8 @@ public class Golem1 : MonoBehaviour
 
     void Die()
     {
+        PlayerMove playerMove = player.GetComponent<PlayerMove>();
+        playerMove.SetupMove(5f, 7f);
         isDead = true;
         anim.SetTrigger("Death");
         rb.velocity = Vector2.zero;
