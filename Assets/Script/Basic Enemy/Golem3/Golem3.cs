@@ -14,10 +14,12 @@ public class Golem3 : MonoBehaviour
     private Transform player; // Sẽ được tìm tự động
 
     [Header("Attack Settings")]
-    [SerializeField] private float attackRange = 1.5f;
+    [SerializeField] private float attackRange = 1f;
     [SerializeField] private int damage = 10;
     [SerializeField] private float attackCooldown = 2f;
     private float lastAttackTime;
+    private bool IsAttacking;
+    private bool prevAttack;
 
     [Header("Health & Combat")]
     [SerializeField] private int maxHealth = 100;
@@ -46,6 +48,8 @@ public class Golem3 : MonoBehaviour
         anim = GetComponent<Animator>();
         currentHealth = maxHealth;
 
+        prevAttack = false;
+
         // Tự động tìm Player
         FindPlayer();
 
@@ -70,19 +74,35 @@ public class Golem3 : MonoBehaviour
         if (distanceToPlayer <= attackRange)
         {
             Attack();
+            IsAttacking = true;
         }
         // Tiếp theo: Đuổi theo nếu player trong tầm nhìn
         else if (distanceToPlayer <= chaseDistance)
         {
             ChasePlayer();
+            IsAttacking = false;
         }
         // Cuối cùng: Tuần tra
         else
         {
             Patrol();
+            IsAttacking = false;
         }
 
         FlipBasedOnVelocity();
+        PlayerMove playerMove = player.GetComponent<PlayerMove>();
+        if (playerMove != null && prevAttack!= IsAttacking)
+        {
+            if (!IsAttacking)
+            {
+                damage = 10;
+            }
+            else
+            {
+                damage += 5;
+            }
+            prevAttack = IsAttacking;
+        }
     }
 
     private void FixedUpdate()

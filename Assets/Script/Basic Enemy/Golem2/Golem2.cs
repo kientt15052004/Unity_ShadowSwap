@@ -14,7 +14,7 @@ public class Golem2 : MonoBehaviour
     private Transform player; // Sẽ được tìm tự động
 
     [Header("Attack Settings")]
-    [SerializeField] private float attackRange = 1.5f;
+    [SerializeField] private float attackRange = 1f;
     [SerializeField] private int damage = 10;
     [SerializeField] private float attackCooldown = 2f;
     private float lastAttackTime;

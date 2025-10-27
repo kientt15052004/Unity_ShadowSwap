@@ -27,7 +27,11 @@ public class PlayerMove : MonoBehaviour
         shadowManager = FindObjectOfType<ShadowManager>();
         healthManager = GetComponent<HealthManager>();
     }
-
+    public void SetupMove(float s, float jh)
+    {
+        speed = s;
+        jumpHeight = jh;
+    }
     private void Update()
     {
         // 1. CẬP NHẬT TRẠNG THÁI GROUNDED 
