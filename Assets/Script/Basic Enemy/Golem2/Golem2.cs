@@ -18,6 +18,7 @@ public class Golem2 : MonoBehaviour
     [SerializeField] private int damage = 10;
     [SerializeField] private float attackCooldown = 2f;
     private float lastAttackTime;
+    private bool IsAttacking;
 
     [Header("Health & Combat")]
     [SerializeField] private int maxHealth = 100;
@@ -29,7 +30,9 @@ public class Golem2 : MonoBehaviour
     [SerializeField] private float wallCheckDistance = 0.6f;
     [SerializeField] private float jumpForce = 7f;
     [SerializeField] private LayerMask groundLayer; // Layer của nền đất và tường
-
+    [SerializeField] private Transform groundCheck; // Điểm để kiểm tra mặt đất
+    [SerializeField] private float groundCheckRadius = 0.2f;
+    private bool IsJumping;
     // Components
     private Rigidbody2D rb;
     private Animator anim;
@@ -37,6 +40,7 @@ public class Golem2 : MonoBehaviour
     // State Variables
     private Vector2 leftPatrolPoint, rightPatrolPoint, currentTarget, initialPosition;
     private bool isFacingRight = true;
+    private bool isChasing = false;
 
     void Start()
     {
@@ -46,6 +50,8 @@ public class Golem2 : MonoBehaviour
 
         // Tự động tìm Player
         FindPlayer();
+
+        EnsureGroundCheck();
 
         // Thiết lập điểm tuần tra
         initialPosition = transform.position;
@@ -67,19 +73,36 @@ public class Golem2 : MonoBehaviour
         if (distanceToPlayer <= attackRange)
         {
             Attack();
+            IsAttacking = true;
         }
         // Tiếp theo: Đuổi theo nếu player trong tầm nhìn
         else if (distanceToPlayer <= chaseDistance)
         {
             ChasePlayer();
+            IsAttacking = false;
         }
         // Cuối cùng: Tuần tra
         else
         {
             Patrol();
+            IsAttacking = false;
+        }
+
+        if (IsGrounded())
+        {
+            IsJumping = false;
+        }
+        else
+        {
+            IsJumping = true;
         }
 
         FlipBasedOnVelocity();
+
+        anim.SetBool("IsAttacking", IsAttacking);
+        anim.SetBool("IsHurt", isHurt);
+        anim.SetBool("IsDead", isDead);
+        anim.SetBool("IsJumping", IsJumping);
     }
 
     private void FixedUpdate()
@@ -121,13 +144,41 @@ public class Golem2 : MonoBehaviour
         if (Time.time > lastAttackTime + attackCooldown)
         {
             lastAttackTime = Time.time;
-            anim.SetTrigger("Attack"); // Kích hoạt animation tấn công
         }
         DealDamageToPlayer();
     }
 
     // --- CÁC HÀM HỖ TRỢ ---
+    private void EnsureGroundCheck()
+    {
+        if (groundCheck != null) return;
 
+        // tạo object child
+        GameObject go = new GameObject("GroundCheck");
+        go.transform.parent = transform;
+
+        // tìm collider để tính offset
+        Collider2D col = GetComponent<Collider2D>();
+        float yOffset = -0.2f;
+        float radius = 0.12f;
+
+        if (col != null)
+        {
+            // lấy extents / bounds
+            Bounds b = col.bounds;
+            // local offset = -(halfHeight) - smallGap
+            float halfHeight = b.extents.y;
+            // chuyển bounds center world -> local
+            Vector3 localBottom = transform.InverseTransformPoint(b.min);
+            yOffset = localBottom.y - 0.02f; // 0.02 unit thấp hơn đáy collider
+                                             // radius tuỳ theo width
+            radius = Mathf.Clamp(b.size.x * 0.08f, 0.08f, 0.35f);
+        }
+
+        go.transform.localPosition = new Vector3(0f, yOffset, 0f);
+        groundCheck = go.transform;
+        groundCheckRadius = radius;
+    }
     void MoveTowards(Vector2 target, float speed)
     {
         Vector2 direction = (target - (Vector2)transform.position).normalized;
@@ -158,8 +209,8 @@ public class Golem2 : MonoBehaviour
 
     void Jump()
     {
-        anim.SetTrigger("Jump");
-        rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+        Vector2 direction = ((Vector2)player.position - (Vector2)transform.position).normalized;
+        rb.velocity = new Vector2(direction.x * patrolSpeed, jumpForce);
     }
 
     void FlipBasedOnVelocity()
@@ -196,7 +247,7 @@ public class Golem2 : MonoBehaviour
         else
         {
             // Bị đau, kích hoạt animation và trạng thái "hurt"
-            anim.SetTrigger("Hurt");
+            isHurt = true;
             StartCoroutine(HurtRoutine());
         }
     }
@@ -212,7 +263,6 @@ public class Golem2 : MonoBehaviour
     void Die()
     {
         isDead = true;
-        anim.SetTrigger("Death");
         rb.velocity = Vector2.zero;
         GetComponent<Collider2D>().enabled = false; // Tắt va chạm để không cản đường
         this.enabled = false; // Tắt script này đi
