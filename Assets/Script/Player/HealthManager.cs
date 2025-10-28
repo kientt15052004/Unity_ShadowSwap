@@ -147,4 +147,23 @@ public class HealthManager : MonoBehaviour
             yield return new WaitForSeconds(1f);
         }
     }
+
+    // HÀM HEAL (HỒI MÁU) ĐÃ ĐƯỢC THÊM VÀO
+    public void Heal(int amount)
+    {
+        currentHealth += amount;
+        if (currentHealth > maxHealth)
+        {
+            currentHealth = maxHealth;
+        }
+
+        // Cập nhật UI sau khi hồi máu (không cần animation Hurt)
+        UpdateHealthText();
+        if (healthBarSlider != null)
+        {
+            healthBarSlider.value = currentHealth;
+        }
+
+        Debug.Log("Player healed for: " + amount + ". Current Health: " + currentHealth);
+    }
 }
