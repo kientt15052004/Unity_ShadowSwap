@@ -33,6 +33,7 @@ public class Golem3 : MonoBehaviour
     [SerializeField] private LayerMask groundLayer; // Layer của nền đất và tường
     [SerializeField] private Transform groundCheck; // Điểm để kiểm tra mặt đất
     [SerializeField] private float groundCheckRadius = 0.2f;
+    private bool IsJumping;
     // Components
     private Rigidbody2D rb;
     private Animator anim;
@@ -105,9 +106,18 @@ public class Golem3 : MonoBehaviour
             }
             prevAttack = IsAttacking;
         }
+        if(IsGrounded())
+        {
+            IsJumping = false;
+        }
+        else
+        {
+            IsJumping = true;
+        }
         anim.SetBool("IsAttacking", IsAttacking);
         anim.SetBool("IsHurt", isHurt);
         anim.SetBool("IsDead", isDead);
+        anim.SetBool("IsJumping", IsJumping);
     }
 
     private void FixedUpdate()
@@ -149,7 +159,6 @@ public class Golem3 : MonoBehaviour
         if (Time.time > lastAttackTime + attackCooldown)
         {
             lastAttackTime = Time.time;
-            anim.SetTrigger("Attack"); // Kích hoạt animation tấn công
         }
         DealDamageToPlayer();
     }
@@ -211,8 +220,8 @@ public class Golem3 : MonoBehaviour
 
     void Jump()
     {
-        anim.SetTrigger("Jump");
-        rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+        Vector2 direction = ((Vector2)player.position - (Vector2)transform.position).normalized;
+        rb.velocity = new Vector2(direction.x * patrolSpeed, jumpForce);
     }
 
     void FlipBasedOnVelocity()
