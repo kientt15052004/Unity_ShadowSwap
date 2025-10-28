@@ -8,6 +8,10 @@ TagManager:
   - Audio
   - Trap
   - Item
+  - Chest
+  - Coin
+  - Heal
+  - Key
   layers:
   - Default
   - TransparentFX
