@@ -50,6 +50,8 @@ public class Golem3 : MonoBehaviour
 
         prevAttack = false;
 
+        EnsureGroundCheck();
+
         // Tự động tìm Player
         FindPlayer();
 
@@ -103,6 +105,9 @@ public class Golem3 : MonoBehaviour
             }
             prevAttack = IsAttacking;
         }
+        anim.SetBool("IsAttacking", IsAttacking);
+        anim.SetBool("IsHurt", isHurt);
+        anim.SetBool("IsDead", isDead);
     }
 
     private void FixedUpdate()
@@ -150,7 +155,36 @@ public class Golem3 : MonoBehaviour
     }
 
     // --- CÁC HÀM HỖ TRỢ ---
+    private void EnsureGroundCheck()
+    {
+        if (groundCheck != null) return;
 
+        // tạo object child
+        GameObject go = new GameObject("GroundCheck");
+        go.transform.parent = transform;
+
+        // tìm collider để tính offset
+        Collider2D col = GetComponent<Collider2D>();
+        float yOffset = -0.2f;
+        float radius = 0.12f;
+
+        if (col != null)
+        {
+            // lấy extents / bounds
+            Bounds b = col.bounds;
+            // local offset = -(halfHeight) - smallGap
+            float halfHeight = b.extents.y;
+            // chuyển bounds center world -> local
+            Vector3 localBottom = transform.InverseTransformPoint(b.min);
+            yOffset = localBottom.y - 0.02f; // 0.02 unit thấp hơn đáy collider
+                                             // radius tuỳ theo width
+            radius = Mathf.Clamp(b.size.x * 0.08f, 0.08f, 0.35f);
+        }
+
+        go.transform.localPosition = new Vector3(0f, yOffset, 0f);
+        groundCheck = go.transform;
+        groundCheckRadius = radius;
+    }
     void MoveTowards(Vector2 target, float speed)
     {
         Vector2 direction = (target - (Vector2)transform.position).normalized;
@@ -215,7 +249,7 @@ public class Golem3 : MonoBehaviour
         else
         {
             // Bị đau, kích hoạt animation và trạng thái "hurt"
-            anim.SetTrigger("Hurt");
+            isHurt = true;
             StartCoroutine(HurtRoutine());
         }
     }

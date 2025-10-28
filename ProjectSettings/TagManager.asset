@@ -8,6 +8,7 @@ TagManager:
   - Audio
   - Trap
   - Item
+  - Undefined
   layers:
   - Default
   - TransparentFX
