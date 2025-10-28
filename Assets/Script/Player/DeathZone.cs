@@ -19,11 +19,13 @@ public class DeathZone : MonoBehaviour
                 {
                     // Chết ngay lập tức
                     health.InstantDeath();
+                    AudioManager.Instance?.PlayHurt();
                 }
                 else
                 {
                     // Trừ máu thông thường
                     health.TakeDamage(damageAmount);
+                    AudioManager.Instance?.PlayHurt();
                 }
             }
         }
