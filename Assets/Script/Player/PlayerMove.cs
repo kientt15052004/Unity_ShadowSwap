@@ -9,6 +9,7 @@ public class PlayerMove : MonoBehaviour
     private Rigidbody2D body;
     private Animator anim;
     private bool grounded;
+    private bool isBusy = false;
 
     // Kiểm tra mặt đất (Thiết lập trong Inspector)
     [Header("Ground Check")]
@@ -57,44 +58,76 @@ public class PlayerMove : MonoBehaviour
         grounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
 
         horizontalInput = Input.GetAxis("Horizontal");
-
-        // 2. XỬ LÝ NHẢY
-        if (Input.GetKeyDown(KeyCode.Space) && grounded)
+        
+        if (!isBusy)
         {
-            body.velocity = new Vector2(body.velocity.x, jumpHeight);
-        }
+            // 2. XỬ LÝ NHẢY
+            if (Input.GetKeyDown(KeyCode.Space) && grounded)
+            {
+                body.velocity = new Vector2(body.velocity.x, jumpHeight);
+            }
 
-        // 3. XỬ LÝ SHADOW SWAP
-        if (Input.GetKeyDown(KeyCode.E))
-        {
-            if (shadowManager != null)
-                // Tạo bóng, truyền kèm localScale để lật đúng chiều
-                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
-        }
+            // 3. XỬ LÝ SHADOW SWAP
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                if (shadowManager != null)
+                    // Tạo bóng, truyền kèm localScale để lật đúng chiều
+                    shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
+            }
 
-        if (Input.GetKeyDown(KeyCode.Q))
-        {
-            if (shadowManager != null)
-                // Dịch chuyển đến bóng
-                shadowManager.TeleportToShadow(transform);
+            if (Input.GetKeyDown(KeyCode.Q))
+            {
+                if (shadowManager != null)
+                    // Dịch chuyển đến bóng
+                    shadowManager.TeleportToShadow(transform);
+            }
+
+            // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
+
+            // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
+            if (Input.GetKeyDown(KeyCode.F) && grounded)
+            {
+                isBusy = true;
+                anim.SetTrigger("Attack1");
+            }
+            // Attack 2 (Đánh từ trên xuống) - Chỉ khi ở trên không
+            else if (Input.GetKeyDown(KeyCode.G) && !grounded)
+            {
+                isBusy = true;
+                anim.SetTrigger("Attack2");
+            }
+            // Block - Chỉ khi trên mặt đất
+            else if (Input.GetKeyDown(KeyCode.H) && grounded)
+            {
+                isBusy = true;
+                anim.SetTrigger("Block");
+            }
         }
 
         // 4. XỬ LÝ HÌNH ẢNH (Animation & Xoay)
-        anim.SetBool("Run", horizontalInput != 0 && grounded);
-        anim.SetBool("Grounded", grounded);
+        anim.SetBool("Grounded", grounded); // Grounded nên cập nhật liên tục
+        if (!isBusy)
+        {
+            anim.SetBool("Run", horizontalInput != 0 && grounded);
 
-        if (horizontalInput > 0.01f)
-        {
-            transform.localScale = new Vector3(2, 2, 1);
-        }
-        else if (horizontalInput < -0.01f)
-        {
-            transform.localScale = new Vector3(-2, 2, 1);
+            if (horizontalInput > 0.01f)
+            {
+                transform.localScale = new Vector3(2, 2, 1);
+            }
+            else if (horizontalInput < -0.01f)
+            {
+                transform.localScale = new Vector3(-2, 2, 1);
+            }
         }
     }
 
     private void FixedUpdate()
     {
+        if (isBusy)
+        {
+            body.velocity = new Vector2(0, body.velocity.y); // Dừng di chuyển ngang
+            return;
+        }
         // Di chuyển ngang (Cho phép di chuyển trên không)
         body.velocity = new Vector2(horizontalInput * speed, body.velocity.y);
     }
@@ -182,5 +215,13 @@ public class PlayerMove : MonoBehaviour
                 Debug.Log("Chest is locked! Need a key.");
             }
         }
+    }
+
+    // 8. (MỚI) ANIMATION EVENTS
+    // Hàm này phải được gọi bằng Animation Event 
+    // tại FRAME CUỐI CÙNG của các animation "Attack1", "Attack2", và "Block"
+    public void AnimationFinished()
+    {
+        isBusy = false;
     }
 }
