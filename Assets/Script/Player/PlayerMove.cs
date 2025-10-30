@@ -10,12 +10,23 @@ public class PlayerMove : MonoBehaviour
     private Animator anim;
     private bool grounded;
     private bool isBusy = false;
+    private bool wasGrounded = true;
 
     // Kiểm tra mặt đất (Thiết lập trong Inspector)
     [Header("Ground Check")]
     [SerializeField] private Transform groundCheck;
     [SerializeField] private float groundCheckRadius = 0.2f;
     [SerializeField] private LayerMask groundLayer;
+
+    // Footstep settings
+    [Header("Footstep Settings")]
+    [SerializeField] private float footstepInterval = 0.3f; // khoảng thời gian giữa 2 bước
+    private float footstepTimer;
+
+    // Hurt sound timer
+    [Header("Hurt Sound Settings")]
+    [SerializeField] private float hurtSoundInterval = 1f;
+    private float hurtSoundTimer = 0f;
 
     private ShadowManager shadowManager;
     private HealthManager healthManager;
@@ -82,6 +93,36 @@ public class PlayerMove : MonoBehaviour
                     shadowManager.TeleportToShadow(transform);
             }
 
+        // Phát âm thanh khi vừa chạm đất
+        if (!wasGrounded && grounded)
+        {
+            AudioManager.Instance?.PlayLand();
+        }
+
+        // 2. XỬ LÝ NHẢY
+        if (Input.GetKeyDown(KeyCode.Space) && grounded)
+        {
+            body.velocity = new Vector2(body.velocity.x, jumpHeight);
+            AudioManager.Instance?.PlayJump();
+        }
+
+        // 3. XỬ LÝ SHADOW SWAP
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            if (shadowManager != null)
+                // Tạo bóng, truyền kèm localScale để lật đúng chiều
+                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
+                AudioManager.Instance?.PlayShadowSummon();
+        }
+
+        if (Input.GetKeyDown(KeyCode.Q))
+        {
+            if (shadowManager != null)
+                // Dịch chuyển đến bóng
+                shadowManager.TeleportToShadow(transform);
+                AudioManager.Instance?.PlayShadowSwap();
+        }
+
             // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
 
             // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
@@ -119,6 +160,48 @@ public class PlayerMove : MonoBehaviour
                 transform.localScale = new Vector3(-2, 2, 1);
             }
         }
+        wasGrounded = grounded;
+        HandleFootsteps();
+        CheckHurtSound();
+    }
+
+    private void HandleFootsteps()
+    {
+        if (grounded && Mathf.Abs(horizontalInput) > 0.1f)
+        {
+            footstepTimer -= Time.deltaTime;
+            if (footstepTimer <= 0f)
+            {
+                AudioManager.Instance?.PlayFootstep();
+                footstepTimer = footstepInterval;
+            }
+        }
+        else
+        {
+            footstepTimer = 0f;
+        }
+    }
+
+    private void CheckHurtSound()
+    {
+        // Kiểm tra xem có đang trong trap không
+        Collider2D[] colliders = Physics2D.OverlapCircleAll(transform.position, 0.5f);
+        bool inTrap = false;
+
+        foreach (Collider2D col in colliders)
+        {
+            if (col.CompareTag("Trap") && col.isTrigger)
+            {
+                inTrap = true;
+                break;
+            }
+        }
+
+        if (inTrap && hurtSoundTimer <= 0f)
+        {
+            AudioManager.Instance?.PlayHurt();
+            hurtSoundTimer = hurtSoundInterval;
+        }
     }
 
     private void FixedUpdate()
@@ -130,6 +213,12 @@ public class PlayerMove : MonoBehaviour
         }
         // Di chuyển ngang (Cho phép di chuyển trên không)
         body.velocity = new Vector2(horizontalInput * speed, body.velocity.y);
+        
+        // Xử lý hurt sound timer
+        if (hurtSoundTimer > 0f)
+        {
+            hurtSoundTimer -= Time.fixedDeltaTime;
+        }
     }
 
     // 5. XỬ LÝ VA CHẠM CỨNG (TRAP)
@@ -141,6 +230,7 @@ public class PlayerMove : MonoBehaviour
             {
                 healthManager.TakeDamage(5); // Sát thương tức thời 5
             }
+            AudioManager.Instance?.PlayHurt();
         }
     }
 
@@ -178,6 +268,7 @@ public class PlayerMove : MonoBehaviour
             coinCollected += 1;
             Debug.Log("Coin Collected! Current Score: " + coinScore);
             Destroy(other.gameObject);
+            AudioManager.Instance?.PlayCoin();
         }
         // XỬ LÝ KEY
         else if (other.CompareTag("Key"))
@@ -187,6 +278,8 @@ public class PlayerMove : MonoBehaviour
 
             Debug.Log("Key Collected! Total Keys: " + keyCollected + ". Coin Score: " + coinScore);
             Destroy(other.gameObject);
+            AudioManager.Instance?.PlayKey();
+
         }
         // XỬ LÝ HEAL
         else if (other.CompareTag("Heal"))
@@ -194,6 +287,8 @@ public class PlayerMove : MonoBehaviour
             if (healthManager != null)
             {
                 healthManager.Heal(20); // Hồi cố định 20 máu
+                AudioManager.Instance?.PlayHeal();
+
             }
             Destroy(other.gameObject);
         }
@@ -206,7 +301,7 @@ public class PlayerMove : MonoBehaviour
                 coinScore += 20; // +20 điểm Coin khi mở Rương
 
                 Debug.Log("Chest Opened! Keys remaining: " + keyCollected + ". Coin Score: " + coinScore);
-
+                AudioManager.Instance?.PlayUnlockChest();
                 // Giả định rương biến mất sau khi mở và nhận thưởng
                 Destroy(other.gameObject);
             }
