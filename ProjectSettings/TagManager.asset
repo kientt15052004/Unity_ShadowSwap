@@ -12,6 +12,7 @@ TagManager:
   - Coin
   - Heal
   - Key
+  - Enemy
   layers:
   - Default
   - TransparentFX
