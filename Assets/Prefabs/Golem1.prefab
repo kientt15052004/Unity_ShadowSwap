@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 2308523909929960747}
   - component: {fileID: 7454102848927700096}
   - component: {fileID: 4703927278422132657}
-  - component: {fileID: 1927570762048809129}
+  - component: {fileID: 6121458369347232528}
   m_Layer: 0
   m_Name: Golem1
   m_TagString: Undefined
@@ -29,7 +29,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3011358936186911818}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -9.983, y: 12.988, z: 0}
+  m_LocalPosition: {x: -137.56104, y: 32.8573, z: 0}
   m_LocalScale: {x: 0.19308984, y: 0.18229909, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -256,7 +256,7 @@ PolygonCollider2D:
       - {x: -0.13, y: -3.09}
       - {x: 0.03, y: -3.03}
       - {x: 0.02, y: -2.96}
---- !u!114 &1927570762048809129
+--- !u!114 &6121458369347232528
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -265,21 +265,6 @@ MonoBehaviour:
   m_GameObject: {fileID: 3011358936186911818}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 005ad8ea457506448b7c570ba9663d75, type: 3}
+  m_Script: {fileID: 11500000, guid: a4151ad3b7b734e45bee661edf594f3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  patrolDistance: 5
-  patrolSpeed: 2
-  chaseDistance: 8
-  chaseSpeed: 4
-  attackRange: 1.5
-  damage: 10
-  attackCooldown: 2
-  maxHealth: 100
-  wallCheckDistance: 0.6
-  jumpForce: 7
-  groundLayer:
-    serializedVersion: 2
-    m_Bits: 0
-  groundCheck: {fileID: 0}
-  groundCheckRadius: 0.2
