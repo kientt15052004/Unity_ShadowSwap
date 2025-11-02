@@ -13,7 +13,9 @@ GameObject:
   - component: {fileID: 8117644293229716256}
   - component: {fileID: 9129195821033294913}
   - component: {fileID: 4616783283586582254}
-  - component: {fileID: 8268201558121307664}
+  - component: {fileID: 4938287086468806390}
+  - component: {fileID: -4191998281311830168}
+  - component: {fileID: 1766203029781730204}
   m_Layer: 0
   m_Name: Golem2
   m_TagString: Untagged
@@ -29,7 +31,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3065426698454971179}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -9.2515, y: 12.9586, z: 0}
+  m_LocalPosition: {x: -139.06592, y: 34.577183, z: 0}
   m_LocalScale: {x: 0.17722526, y: 0.17101434, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -264,7 +266,7 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 4
---- !u!114 &8268201558121307664
+--- !u!114 &4938287086468806390
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -273,19 +275,59 @@ MonoBehaviour:
   m_GameObject: {fileID: 3065426698454971179}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: eb2fbc403a5be604a8e81e7a70b7ab07, type: 3}
+  m_Script: {fileID: 11500000, guid: ca0e96b319aa71341926375cfb00786b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  patrolDistance: 5
+--- !u!114 &-4191998281311830168
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3065426698454971179}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe2a469828e56ef40aabb4f41119db1c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  patrolDistance: 4
   patrolSpeed: 2
   chaseDistance: 8
   chaseSpeed: 4
-  attackRange: 1.5
-  damage: 10
-  attackCooldown: 2
-  maxHealth: 100
   wallCheckDistance: 0.6
+  ledgeCheckDistance: 0.6
   jumpForce: 7
   groundLayer:
     serializedVersion: 2
     m_Bits: 0
+  groundCheck: {fileID: 0}
+  groundCheckRadius: 0.12
+  maxJumpableGap: 1.2
+  attackData: {fileID: 0}
+  attackHitbox: {fileID: 0}
+  attackRange: 1
+  attackCooldown: 1
+  maxHealth: 100
+  invincibilityTime: 0.15
+  directionChangeCooldown: 0.4
+  rb: {fileID: 0}
+  anim: {fileID: 0}
+  player: {fileID: 0}
+  startPos: {x: 0, y: 0}
+  leftPoint: {x: 0, y: 0}
+  rightPoint: {x: 0, y: 0}
+  targetPoint: {x: 0, y: 0}
+  isFacingRight: 1
+  jumpCooldown: 0.5
+--- !u!114 &1766203029781730204
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3065426698454971179}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c1925edc1b04fd438db1f3bd0f7755e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

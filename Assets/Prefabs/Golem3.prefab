@@ -11,9 +11,11 @@ GameObject:
   - component: {fileID: 2345089933386716342}
   - component: {fileID: 2345089933386716343}
   - component: {fileID: 2345089933386716329}
-  - component: {fileID: 2345089933386716330}
   - component: {fileID: 2345089933386716341}
   - component: {fileID: 347145237965831813}
+  - component: {fileID: 5351342747858092957}
+  - component: {fileID: 6619191245420371544}
+  - component: {fileID: -6020339093058830788}
   m_Layer: 0
   m_Name: Golem3
   m_TagString: Untagged
@@ -29,7 +31,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2345089933386716331}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -9.55, y: 12.95, z: 0}
+  m_LocalPosition: {x: -137.66852, y: 34.147213, z: 0}
   m_LocalScale: {x: 0.15807302, y: 0.1697873, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -109,33 +111,6 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!114 &2345089933386716330
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2345089933386716331}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c508105f045803c47ac4984d65a100a9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  patrolDistance: 5
-  patrolSpeed: 2
-  chaseDistance: 8
-  chaseSpeed: 4
-  attackRange: 1.5
-  damage: 10
-  attackCooldown: 2
-  maxHealth: 100
-  wallCheckDistance: 0.6
-  jumpForce: 7
-  groundLayer:
-    serializedVersion: 2
-    m_Bits: 0
-  groundCheck: {fileID: 0}
-  groundCheckRadius: 0.2
 --- !u!50 &2345089933386716341
 Rigidbody2D:
   serializedVersion: 4
@@ -276,3 +251,68 @@ PolygonCollider2D:
       - {x: -0.08, y: -3.02}
       - {x: -0.01, y: -2.9199998}
       - {x: 0.049999997, y: -2.99}
+--- !u!114 &5351342747858092957
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2345089933386716331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a626b790e3996347a5097e4c7f2218b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &6619191245420371544
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2345089933386716331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe2a469828e56ef40aabb4f41119db1c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  patrolDistance: 4
+  patrolSpeed: 2
+  chaseDistance: 8
+  chaseSpeed: 4
+  wallCheckDistance: 0.6
+  ledgeCheckDistance: 0.6
+  jumpForce: 7
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 0
+  groundCheck: {fileID: 0}
+  groundCheckRadius: 0.12
+  maxJumpableGap: 1.2
+  attackData: {fileID: 0}
+  attackHitbox: {fileID: 0}
+  attackRange: 1
+  attackCooldown: 1
+  maxHealth: 100
+  invincibilityTime: 0.15
+  directionChangeCooldown: 0.4
+  rb: {fileID: 0}
+  anim: {fileID: 0}
+  player: {fileID: 0}
+  startPos: {x: 0, y: 0}
+  leftPoint: {x: 0, y: 0}
+  rightPoint: {x: 0, y: 0}
+  targetPoint: {x: 0, y: 0}
+  isFacingRight: 1
+  jumpCooldown: 0.5
+--- !u!114 &-6020339093058830788
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2345089933386716331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c1925edc1b04fd438db1f3bd0f7755e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
