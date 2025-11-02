@@ -30,6 +30,7 @@ public class PlayerMove : MonoBehaviour
 
     private ShadowManager shadowManager;
     private HealthManager healthManager;
+    private PlayerAttackController attackController;
     private float horizontalInput;
 
     // BIẾN THỐNG KÊ
@@ -47,6 +48,7 @@ public class PlayerMove : MonoBehaviour
         anim = GetComponent<Animator>();
         shadowManager = FindObjectOfType<ShadowManager>();
         healthManager = GetComponent<HealthManager>();
+        attackController = GetComponent<PlayerAttackController>();
 
         // KHỞI TẠO CÁC BIẾN TỔNG SỐ ITEM TẠI ĐÂY
         coinCount = GameObject.FindGameObjectsWithTag("Coin").Length;
@@ -69,29 +71,27 @@ public class PlayerMove : MonoBehaviour
         grounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
 
         horizontalInput = Input.GetAxis("Horizontal");
-        
-        if (!isBusy)
+
+        // 2. XỬ LÝ NHẢY
+        if (Input.GetKeyDown(KeyCode.Space) && grounded)
         {
-            // 2. XỬ LÝ NHẢY
-            if (Input.GetKeyDown(KeyCode.Space) && grounded)
-            {
-                body.velocity = new Vector2(body.velocity.x, jumpHeight);
-            }
+            body.velocity = new Vector2(body.velocity.x, jumpHeight);
+        }
 
-            // 3. XỬ LÝ SHADOW SWAP
-            if (Input.GetKeyDown(KeyCode.E))
-            {
-                if (shadowManager != null)
-                    // Tạo bóng, truyền kèm localScale để lật đúng chiều
-                    shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
-            }
+        // 3. XỬ LÝ SHADOW SWAP
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            if (shadowManager != null)
+                // Tạo bóng, truyền kèm localScale để lật đúng chiều
+                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
+        }
 
-            if (Input.GetKeyDown(KeyCode.Q))
-            {
-                if (shadowManager != null)
-                    // Dịch chuyển đến bóng
-                    shadowManager.TeleportToShadow(transform);
-            }
+        if (Input.GetKeyDown(KeyCode.Q))
+        {
+            if (shadowManager != null)
+                // Dịch chuyển đến bóng
+                shadowManager.TeleportToShadow(transform);
+        }
 
         // Phát âm thanh khi vừa chạm đất
         if (!wasGrounded && grounded)
@@ -112,7 +112,7 @@ public class PlayerMove : MonoBehaviour
             if (shadowManager != null)
                 // Tạo bóng, truyền kèm localScale để lật đúng chiều
                 shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
-                AudioManager.Instance?.PlayShadowSummon();
+            AudioManager.Instance?.PlayShadowSummon();
         }
 
         if (Input.GetKeyDown(KeyCode.Q))
@@ -120,46 +120,45 @@ public class PlayerMove : MonoBehaviour
             if (shadowManager != null)
                 // Dịch chuyển đến bóng
                 shadowManager.TeleportToShadow(transform);
-                AudioManager.Instance?.PlayShadowSwap();
+            AudioManager.Instance?.PlayShadowSwap();
         }
 
-            // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
+        // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
 
-            // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
-            if (Input.GetKeyDown(KeyCode.F) && grounded)
-            {
-                isBusy = true;
-                anim.SetTrigger("Attack1");
-            }
-            // Attack 2 (Đánh từ trên xuống) - Chỉ khi ở trên không
-            else if (Input.GetKeyDown(KeyCode.G) && !grounded)
-            {
-                isBusy = true;
-                anim.SetTrigger("Attack2");
-            }
-            // Block - Chỉ khi trên mặt đất
-            else if (Input.GetKeyDown(KeyCode.H) && grounded)
-            {
-                isBusy = true;
-                anim.SetTrigger("Block");
-            }
+        // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
+        if (Input.GetKeyDown(KeyCode.F) && grounded)
+        {
+            isBusy = true;
+            anim.SetTrigger("Attack1");
         }
+        // Attack 2 (Đánh từ trên xuống) - Chỉ khi ở trên không
+        else if (Input.GetKeyDown(KeyCode.G) && !grounded)
+        {
+            isBusy = true;
+            anim.SetTrigger("Attack2");
+        }
+        // Block - Chỉ khi trên mặt đất
+        else if (Input.GetKeyDown(KeyCode.H) && grounded)
+        {
+            isBusy = true;
+            anim.SetTrigger("Block");
+        }
+
 
         // 4. XỬ LÝ HÌNH ẢNH (Animation & Xoay)
         anim.SetBool("Grounded", grounded); // Grounded nên cập nhật liên tục
-        if (!isBusy)
-        {
-            anim.SetBool("Run", horizontalInput != 0 && grounded);
 
-            if (horizontalInput > 0.01f)
-            {
-                transform.localScale = new Vector3(2, 2, 1);
-            }
-            else if (horizontalInput < -0.01f)
-            {
-                transform.localScale = new Vector3(-2, 2, 1);
-            }
+        anim.SetBool("Run", horizontalInput != 0 && grounded);
+
+        if (horizontalInput > 0.01f)
+        {
+            transform.localScale = new Vector3(2, 2, 1);
         }
+        else if (horizontalInput < -0.01f)
+        {
+            transform.localScale = new Vector3(-2, 2, 1);
+        }
+
         wasGrounded = grounded;
         HandleFootsteps();
         CheckHurtSound();
@@ -213,7 +212,7 @@ public class PlayerMove : MonoBehaviour
         }
         // Di chuyển ngang (Cho phép di chuyển trên không)
         body.velocity = new Vector2(horizontalInput * speed, body.velocity.y);
-        
+
         // Xử lý hurt sound timer
         if (hurtSoundTimer > 0f)
         {
@@ -257,6 +256,17 @@ public class PlayerMove : MonoBehaviour
             }
         }
     }
+    // ----------------------------------------------------------------------
+    // 8.ANIMATION EVENTS
+    // Hàm này được gọi bởi Animation Event từ Animator (tại frame hit)
+    public void OnPlayerAttackHit()
+    {
+        if (attackController != null)
+        {
+            attackController.OnPlayerAttackHit();
+        }
+    }
+
 
     // XỬ LÝ TẤT CẢ ITEM PICKUP (OnTriggerEnter2D)
     private void OnTriggerEnter2D(Collider2D other)
@@ -312,7 +322,7 @@ public class PlayerMove : MonoBehaviour
         }
     }
 
-    // 8. (MỚI) ANIMATION EVENTS
+    // 9.ANIMATION EVENTS
     // Hàm này phải được gọi bằng Animation Event 
     // tại FRAME CUỐI CÙNG của các animation "Attack1", "Attack2", và "Block"
     public void AnimationFinished()
