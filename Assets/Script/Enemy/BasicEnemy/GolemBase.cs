@@ -1,40 +1,24 @@
-using UnityEngine;
+﻿using UnityEngine;
 
+// Đảm bảo EnemyCore luôn được thêm vào GameObject này
 [RequireComponent(typeof(EnemyCore))]
 public class GolemBase : MonoBehaviour
 {
+    // Biến core được protected để Golem1 có thể truy cập
     protected EnemyCore core;
 
     protected virtual void Awake()
     {
+        // KHẮC PHỤC GỐC RỄ CỦA LỖI NRE: Gán giá trị cho 'core'
         core = GetComponent<EnemyCore>();
+
+        if (core == null)
+        {
+            Debug.LogError($"GolemBase: Không tìm thấy component EnemyCore trên {gameObject.name}. Vui lòng kiểm tra lại cài đặt component.");
+        }
     }
 
-    protected virtual void Start()
-    {
-        // nothing by default
-    }
-
-    protected virtual void Update()
-    {
-        // fallback behavior: patrol/chase/attack
-        if (core.player == null) core.FindPlayer();
-        if (core.player == null) return;
-        float d = Vector2.Distance(core.transform.position, core.player.position);
-        if (d <= core.attackRange) core.TryAttack();
-        else if (d <= core.chaseDistance) core.SimpleChase();
-        else core.SimplePatrol();
-    }
-
-    protected virtual void FixedUpdate()
-    {
-        // default: call core's default FixedUpdate checks through core (which already runs them)
-    }
-
-    // animation event hook
-    public virtual void OnAttackHit() { core.OnAttackHit(); }
-
-    // damage hooks
-    public virtual void OnDamaged(DamageInfo info) { /* optional override */ }
-    public virtual void OnDied() { /* optional override */ }
+    public virtual void OnAttackHit() { }
+    public virtual void OnDamaged(DamageInfo info) { }
+    public virtual void OnDied() { }
 }

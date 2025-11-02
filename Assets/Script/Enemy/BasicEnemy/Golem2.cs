@@ -5,7 +5,7 @@ using UnityEngine;
 [RequireComponent(typeof(GolemBase))]
 public class Golem2 : GolemBase
 {
-    protected override void Update()
+    protected virtual void Update()
     {
         if (core.player == null) core.FindPlayer();
         if (core.player == null) return;

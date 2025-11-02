@@ -16,7 +16,7 @@ public struct DamageInfo
 
 public interface IDamageable { void TakeDamage(DamageInfo info); }
 
-[RequireComponent(typeof(Collider2D))]
+
 public class Health : MonoBehaviour, IDamageable
 {
     [Header("Health")]
@@ -46,7 +46,7 @@ public class Health : MonoBehaviour, IDamageable
     public void Heal(int amount) { currentHealth = Mathf.Min(maxHealth, currentHealth + amount); }
 }
 
-[CreateAssetMenu(menuName = "Enemy/AttackData")]
+
 public class AttackData : ScriptableObject
 {
     public int damage = 10;
@@ -56,14 +56,14 @@ public class AttackData : ScriptableObject
     public GameObject hitVFX;
 }
 
-[RequireComponent(typeof(Collider2D))]
+
 public class AttackHitbox : MonoBehaviour
 {
     public LayerMask hitLayers = ~0;
 
-    // REFACTOR: Tạo một bộ đệm (buffer) để tái sử dụng, tránh tạo mảng mới mỗi lần.
-    // Con số 10 có nghĩa là nó có thể phát hiện tối đa 10 colliders 1 lúc.
-    private Collider2D[] _hitsBuffer = new Collider2D[10];
+    // REFACTOR: Tạo một bộ đệm (buffer) để tái sử dụng, tránh tạo mảng mới mỗi lần.
+    // Con số 10 có nghĩa là nó có thể phát hiện tối đa 10 colliders 1 lúc.
+    private Collider2D[] _hitsBuffer = new Collider2D[10];
 
     public void DoAttack(AttackData data, Transform origin, bool isFacingRight)
     {
@@ -71,8 +71,8 @@ public class AttackHitbox : MonoBehaviour
 
         Vector2 center = (Vector2)origin.position + (isFacingRight ? Vector2.right : Vector2.left) * (data.range * 0.5f);
 
-        // REFACTOR: Sử dụng OverlapCircleNonAlloc để không tạo rác (GC)
-        int hitCount = Physics2D.OverlapCircleNonAlloc(center, data.range, _hitsBuffer, data.hitLayers);
+        // REFACTOR: Sử dụng OverlapCircleNonAlloc để không tạo rác (GC)
+        int hitCount = Physics2D.OverlapCircleNonAlloc(center, data.range, _hitsBuffer, data.hitLayers);
 
         for (int i = 0; i < hitCount; i++)
         {
@@ -89,13 +89,15 @@ public class AttackHitbox : MonoBehaviour
                 d.TakeDamage(new DamageInfo(data.damage, origin.position, origin.gameObject, false));
                 if (data.hitVFX != null) Instantiate(data.hitVFX, col.transform.position, Quaternion.identity);
             }
+            // Clear the buffer slot after use
+            _hitsBuffer[i] = null;
         }
     }
 }
 public static class JumpMathUtility
 {
-    // Simulate a jump (forward integration) to estimate reachability.
-    public static bool CanReachByJump(Vector2 start, Vector2 target, float horizontalSpeed, float jumpForce, float gravity, LayerMask groundLayer, float timeStep = 0.02f, float maxTime = 2f, float groundCheckRadius = 0.15f)
+    // Simulate a jump (forward integration) to estimate reachability.
+    public static bool CanReachByJump(Vector2 start, Vector2 target, float horizontalSpeed, float jumpForce, float gravity, LayerMask groundLayer, float timeStep = 0.02f, float maxTime = 2f, float groundCheckRadius = 0.15f)
     {
         if (gravity <= 0f) gravity = 9.81f;
         float dir = Mathf.Sign(target.x - start.x);
@@ -120,8 +122,8 @@ public static class JumpMathUtility
 }
 
 // ------------------------ EnemyCore (main file) ------------------------
-[RequireComponent(typeof(Rigidbody2D), typeof(Animator))]
-public class EnemyCore : MonoBehaviour
+
+public class EnemyCore : MonoBehaviour, IDamageable
 {
     [Header("Movement")]
     public float patrolDistance = 4f;
@@ -129,7 +131,7 @@ public class EnemyCore : MonoBehaviour
     public float chaseDistance = 8f;
     public float chaseSpeed = 4f;
 
-    [Header("Jumping/Wall")]
+
     public float wallCheckDistance = 0.6f;
     public float ledgeCheckDistance = 0.6f;
     public float jumpForce = 7f;
@@ -148,8 +150,11 @@ public class EnemyCore : MonoBehaviour
     public int maxHealth = 100;
     public float invincibilityTime = 0.15f;
 
-    // internals
-    [HideInInspector] public Rigidbody2D rb;
+
+    public float directionChangeCooldown = 0.4f;
+
+    // internals
+    [HideInInspector] public Rigidbody2D rb;
     [HideInInspector] public Animator anim;
     [HideInInspector] public Transform player;
 
@@ -159,24 +164,32 @@ public class EnemyCore : MonoBehaviour
     [HideInInspector] public Vector2 targetPoint;
     [HideInInspector] public bool isFacingRight = true;
 
+    // Các trường protected cũ:
     protected int currentHealth;
     protected float lastHitAt = -999f;
     protected float lastAttackAt = -999f;
     protected bool isHurt = false;
     protected bool isDead = false;
+    protected bool isAttacking = false;
+    protected float lastDirectionChangeAt = -999f;
+    protected float lastJumpAt = -999f; // Đã chuyển lên đây để dùng nhất quán
+    private float jumpCooldown = 0.5f;
 
-    // NEW: track attack state (using bool-based animator)
-    protected bool isAttacking = false;
+    // KHẮC PHỤC LỖI CS0122: Thêm Public Read-Only Properties
+    public bool IsDead => isDead;
+    public bool IsHurt => isHurt;
+    public bool IsAttacking => isAttacking;
 
     protected virtual void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        // FIX 2: Thêm kiểm tra null cho Animator để tránh lỗi UnassignedReferenceException
-        anim = GetComponent<Animator>();
+        anim = GetComponent<Animator>();
         if (anim == null)
         {
             Debug.LogError("EnemyCore on " + gameObject.name + " requires an Animator component!");
         }
+        if (GetComponent<IDamageable>() == null) gameObject.AddComponent<Health>();
+
         currentHealth = maxHealth;
         EnsureGroundCheck();
     }
@@ -194,106 +207,98 @@ public class EnemyCore : MonoBehaviour
     {
         if (isDead) return;
         if (player == null) FindPlayer();
-        if (isHurt) { UpdateAnimationFlags(); return; }
-        // Note: behaviors (Golem classes) typically call SimplePatrol/SimpleChase/TryAttack when appropriate.
-        UpdateAnimationFlags();
-        FlipByVelocity();
+
+        UpdateAnimationFlags();
+
+        // AI Golem1 sẽ quản lý việc quay mặt (FaceTarget)
     }
 
-    protected float lastJumpAt = -999f; // thời điểm nhảy gần nhất
-    [SerializeField] private float jumpCooldown = 0.5f; // thời gian chờ giữa 2 lần nhảy
-
-
-    protected virtual void FixedUpdate()
+    protected virtual void FixedUpdate()
     {
         if (isDead || isHurt || isAttacking)
         {
-            if (isAttacking)
-            {
-                rb.velocity = new Vector2(0f, rb.velocity.y);
-            }
+            rb.velocity = new Vector2(0f, rb.velocity.y);
             return;
         }
 
-        // FIX 1: Đã xóa dòng chặn di chuyển: if (Mathf.Abs(rb.velocity.x) < 0.05f) return;
-        // Giúp logic kiểm tra tường/rìa luôn chạy, ngăn kẹt ở trạng thái đứng yên sau khi đảo hướng.
+        if (Time.time < lastDirectionChangeAt + directionChangeCooldown)
+        {
+            rb.velocity = new Vector2(0f, rb.velocity.y);
+            return;
+        }
 
-        // --- Chuẩn bị raycast ---
-        Vector2 dir = isFacingRight ? Vector2.right : Vector2.left;
 
-        // Lấy vị trí gốc (chân)
-        Vector2 baseOrigin = groundCheck != null ? (Vector2)groundCheck.position : (Vector2)transform.position;
+        Vector2 dir = isFacingRight ? Vector2.right : Vector2.left;
 
-        // SỬA LỖI: Bắt đầu Raycast từ một điểm hơi CAO HƠN mặt đất (ví dụ: 0.1f)
-        // để tránh việc raycast bắt đầu TỪ BÊN TRONG collider của mặt đất.
-        Vector2 rayOrigin = baseOrigin + (Vector2.up * 0.1f);
+        Vector2 baseOrigin = groundCheck != null ? (Vector2)groundCheck.position : (Vector2)transform.position;
+        Vector2 rayOrigin = baseOrigin + (Vector2.up * 0.1f);
+        float groundCheckRayLength = 1.2f + 0.1f;
 
-        // Chiều dài raycast xuống đất cần tăng thêm tương ứng (1.2f ban đầu + 0.1f nâng lên)
-        float groundCheckRayLength = 1.2f + 0.1f;
+        RaycastHit2D wall = Physics2D.Raycast(rayOrigin, dir, wallCheckDistance, groundLayer);
 
-        // --- Kiểm tra tường ---
-        // Dùng rayOrigin (cao hơn 0.1f)
-        RaycastHit2D wall = Physics2D.Raycast(rayOrigin, dir, wallCheckDistance, groundLayer);
-
-        // --- Kiểm tra mặt đất phía trước ---
-        // Dùng điểm bắt đầu ở phía trước VÀ cao hơn 0.1f
-        Vector2 ledgeCheckStart = rayOrigin + dir * ledgeCheckDistance;
+        Vector2 ledgeCheckStart = rayOrigin + dir * ledgeCheckDistance;
         bool groundAhead = Physics2D.Raycast(ledgeCheckStart, Vector2.down, groundCheckRayLength, groundLayer);
 
-        // --- Nếu gặp tường ---
-        if (wall.collider != null)
+        // --- XỬ LÝ KHI GẶP TƯỜNG ---
+        if (wall.collider != null)
         {
-            // Nếu player cao hơn enemy một chút → thử nhảy
-            if (player != null && player.position.y > transform.position.y + 0.4f && IsGrounded())
+            // Điều kiện nhảy tường:
+            // 1. Player phải ở vị trí cao hơn đáng kể (0.4f)
+            // 2. Golem phải đang đứng trên đất
+            // 3. Phải qua cooldown nhảy
+            if (player != null && player.position.y > transform.position.y + 0.4f && IsGrounded())
             {
-                // Kiểm tra không nhảy quá dày
-                if (Time.time > lastHitAt + 0.3f)
+                if (Time.time > lastJumpAt + jumpCooldown)
                 {
                     TryJump();
-                    lastHitAt = Time.time; // dùng tạm lastHitAt như cooldown nhảy
-                }
-            }
-            else
-            {
-                ReverseDirection();
-            }
-        }
-        // --- Nếu sắp hết đường ---
-        // Logic này giờ sẽ chỉ kích hoạt khi THỰC SỰ ở rìa
-        else if (!groundAhead)
-        {
-            // Nếu player ở cao hơn, trong phạm vi gap cho phép → nhảy theo
-            if (player != null && player.position.y > transform.position.y + 0.3f &&
-        Mathf.Abs(player.position.x - transform.position.x) <= maxJumpableGap && IsGrounded())
-            {
-                if (Time.time > lastHitAt + 0.3f)
-                {
-                    JumpTowardsPlayer();
-                    lastHitAt = Time.time;
+                    lastJumpAt = Time.time; // Cập nhật thời gian nhảy
                 }
             }
             else
             {
+                // Nếu không thể/không cần nhảy, đảo hướng
+                ReverseDirection();
+            }
+        }
+        // --- XỬ LÝ KHI GẶP RÌA VỰC ---
+        else if (!groundAhead && IsGrounded())
+        {
+            // Điều kiện nhảy qua khe hở:
+            // 1. Player phải ở vị trí cao hơn (0.3f)
+            // 2. Player phải trong phạm vi khe hở cho phép (maxJumpableGap)
+            // 3. Phải qua cooldown nhảy
+            if (player != null && player.position.y > transform.position.y + 0.3f &&
+            Mathf.Abs(player.position.x - transform.position.x) <= maxJumpableGap &&
+            Time.time > lastJumpAt + jumpCooldown) // Dùng jumpCooldown
+            {
+                JumpTowardsPlayer();
+                lastJumpAt = Time.time; // Cập nhật thời gian nhảy
+            }
+            else
+            {
+                // Nếu không thể/không cần nhảy, đảo hướng
                 ReverseDirection();
             }
         }
     }
 
 
-    // -- movement helpers --
-    public void SimplePatrol()
+    // -- movement helpers --
+    public void SimplePatrol()
     {
-        if (isAttacking) return; // guard
-        if (anim != null) anim.SetBool("Run", true); // FIX 2: Thêm kiểm tra null
-        if (Vector2.Distance(transform.position, targetPoint) < 0.2f) targetPoint = (targetPoint == rightPoint) ? leftPoint : rightPoint;
+        if (isAttacking || Time.time < lastDirectionChangeAt + directionChangeCooldown) return;
+
+        if (anim != null) anim.SetBool("Run", true);
+        if (Vector2.Distance(transform.position, targetPoint) < 0.2f) targetPoint = (targetPoint == rightPoint) ? leftPoint : rightPoint;
         MoveTowards(targetPoint, patrolSpeed);
     }
 
     public void SimpleChase()
     {
-        if (isAttacking) return; // guard
-        if (anim != null) anim.SetBool("Run", true); // FIX 2: Thêm kiểm tra null
-        if (player != null) MoveTowards(player.position, chaseSpeed);
+        if (isAttacking || Time.time < lastDirectionChangeAt + directionChangeCooldown) return;
+
+        if (anim != null) anim.SetBool("Run", true);
+        if (player != null) MoveTowards(player.position, chaseSpeed);
     }
 
     public void MoveTowards(Vector2 t, float speed)
@@ -302,34 +307,38 @@ public class EnemyCore : MonoBehaviour
         rb.velocity = new Vector2(dir.x * speed, rb.velocity.y);
     }
 
-    // -- Attack control (bool-based animation) --
-    public virtual void TryAttack()
+    // -- Attack control (bool-based animation) --
+    public virtual void TryAttack()
     {
         if (Time.time < lastAttackAt + attackCooldown) return;
-        if (isAttacking) return; // already attacking
-        lastAttackAt = Time.time;
+        if (isAttacking) return;
+        lastAttackAt = Time.time;
 
-        // start attack: stop movement and set bool
-        rb.velocity = new Vector2(0f, rb.velocity.y);
+        rb.velocity = new Vector2(0f, rb.velocity.y);
         isAttacking = true;
-        if (anim != null) anim.SetBool("IsAttacking", true); // FIX 2: Thêm kiểm tra null
-    }
-
-    // Animation event at hit frame should call this to apply damage
-    public void OnAttackHit()
-    {
-        if (attackHitbox != null && attackData != null) attackHitbox.DoAttack(attackData, transform, isFacingRight);
+        if (anim != null) anim.SetBool("IsAttacking", true);
     }
 
-    // Animation event at the END of the attack animation should call this to finish attack state
-    public void EndAttack()
+    // Animation event at hit frame should call this to apply damage
+    public void OnAttackHit()
+    {
+        if (attackHitbox != null && attackData != null)
+        {
+            attackHitbox.DoAttack(attackData, transform, isFacingRight);
+        }
+    }
+
+    // Animation event at the END of the attack animation should call this to finish attack state
+    public void EndAttack()
     {
         isAttacking = false;
-        if (anim != null) anim.SetBool("IsAttacking", false); // FIX 2: Thêm kiểm tra null
-    }
+        if (anim != null) anim.SetBool("IsAttacking", false);
+    }
 
     public void ReverseDirection()
     {
+        lastDirectionChangeAt = Time.time;
+
         rb.velocity = Vector2.zero;
         Flip();
         targetPoint = (targetPoint == rightPoint) ? leftPoint : rightPoint;
@@ -338,8 +347,8 @@ public class EnemyCore : MonoBehaviour
     public void TryJump() { if (IsGrounded()) rb.velocity = new Vector2(rb.velocity.x, jumpForce); }
     public void JumpTowardsPlayer() { if (IsGrounded() && player != null) { Vector2 dir = ((Vector2)player.position - (Vector2)transform.position).normalized; rb.velocity = new Vector2(dir.x * patrolSpeed, jumpForce); } }
 
-    // -- damage / health handling --
-    public virtual void TakeDamage(DamageInfo info)
+    // -- damage / health handling --
+    public virtual void TakeDamage(DamageInfo info)
     {
         if (isDead) return;
         if (Time.time < lastHitAt + invincibilityTime) return;
@@ -353,69 +362,97 @@ public class EnemyCore : MonoBehaviour
     {
         if (isDead) return;
         isHurt = true;
-        // cancel attack if being hurt
-        if (isAttacking)
+
+        if (isAttacking)
         {
             isAttacking = false;
-            if (anim != null) anim.SetBool("IsAttacking", false); // FIX 2: Thêm kiểm tra null
-        }
+            if (anim != null) anim.SetBool("IsAttacking", false);
+        }
         rb.velocity = Vector2.zero;
         StartCoroutine(HurtRoutine());
     }
 
     protected IEnumerator HurtRoutine()
     {
-        if (anim != null) anim.SetBool("IsHurt", true); // FIX 2: Thêm kiểm tra null
-        yield return new WaitForSeconds(0.45f);
-        if (anim != null) anim.SetBool("IsHurt", false); // FIX 2: Thêm kiểm tra null
-        isHurt = false;
+        if (anim != null) anim.SetBool("IsHurt", true);
+        yield return new WaitForSeconds(0.45f);
+        if (anim != null) anim.SetBool("IsHurt", false);
+        isHurt = false;
     }
 
     protected virtual void OnDieLocal()
     {
         isDead = true;
-        if (anim != null) anim.SetBool("IsDead", true); // FIX 2: Thêm kiểm tra null
-        rb.velocity = Vector2.zero;
+        if (anim != null) anim.SetBool("IsDead", true);
+        rb.velocity = Vector2.zero;
         var c = GetComponent<Collider2D>();
         if (c) c.enabled = false;
         this.enabled = false;
         Destroy(gameObject, 3f);
     }
 
-    // -- utilities --
-    // Make FindPlayer public so other classes can call safely
-    public void FindPlayer() { var go = GameObject.FindGameObjectWithTag("Player"); if (go != null) player = go.transform; }
+    // -- utilities --
+    public void FindPlayer() { var go = GameObject.FindGameObjectWithTag("Player"); if (go != null) player = go.transform; }
     public void FlipByVelocity() { if (rb.velocity.x > 0.1f && !isFacingRight) Flip(); else if (rb.velocity.x < -0.1f && isFacingRight) Flip(); }
+
+    /// <summary> Quay mặt về hướng ngược lại. </summary>
     public void Flip() { isFacingRight = !isFacingRight; var s = transform.localScale; s.x *= -1f; transform.localScale = s; }
+
+    /// <summary> Buộc Golem quay mặt về phía vị trí mục tiêu. </summary>
+    public void FaceTarget(Vector2 targetPosition)
+    {
+        float direction = targetPosition.x - transform.position.x;
+
+        if (direction > 0 && !isFacingRight)
+        {
+            Flip();
+        }
+        else if (direction < 0 && isFacingRight)
+        {
+            Flip();
+        }
+    }
+
     public void EnsureGroundCheck() { if (groundCheck != null) return; GameObject go = new GameObject("GroundCheck"); go.transform.parent = transform; go.transform.localPosition = Vector3.zero; groundCheck = go.transform; groundCheckRadius = 0.12f; }
     public bool IsGrounded() { if (groundCheck == null) return false; return Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer); }
     public void UpdateAnimationFlags()
     {
-        if (anim == null) return; // FIX 2: Thêm kiểm tra null 
-        anim.SetBool("IsAttacking", isAttacking);
+        if (anim == null) return;
+        anim.SetBool("IsAttacking", isAttacking);
         anim.SetBool("IsHurt", isHurt);
         anim.SetBool("IsDead", isDead);
-        anim.SetBool("IsJumping", !IsGrounded());
+        anim.SetBool("IsJumping", !IsGrounded() && rb.velocity.y > 0.05f);
+        anim.SetBool("Run", IsGrounded() && Mathf.Abs(rb.velocity.x) > 0.1f);
     }
 
-    // Expose helper: simulate jump arc to decide if enemy should attempt jump
-    public bool CanReachByJump(Vector2 target)
+    // Expose helper: simulate jump arc to decide if enemy should attempt jump
+    public bool CanReachByJump(Vector2 target)
     {
         return JumpMathUtility.CanReachByJump(transform.position, target, patrolSpeed, jumpForce, Mathf.Abs(Physics2D.gravity.y * rb.gravityScale), groundLayer, 0.02f, 2f, groundCheckRadius);
     }
 
-    // Debug gizmos
-    void OnDrawGizmosSelected()
+    // Debug gizmos (Đã chỉnh lại để Gizmo vẽ đúng vị trí kiểm tra)
+    void OnDrawGizmosSelected()
     {
         if (groundCheck != null)
         {
             Gizmos.color = Color.green;
             Gizmos.DrawWireSphere(groundCheck.position, groundCheckRadius);
         }
+
         Vector2 dir = isFacingRight ? Vector2.right : Vector2.left;
+
+        Vector2 baseOrigin = groundCheck != null ? (Vector2)groundCheck.position : (Vector2)transform.position;
+        Vector2 rayOrigin = baseOrigin + (Vector2.up * 0.1f);
+        float groundCheckRayLength = 1.3f;
+
+        // Wall Check Gizmo (Horizontal)
         Gizmos.color = Color.red;
-        Gizmos.DrawLine(transform.position, transform.position + (Vector3)dir * wallCheckDistance);
+        Gizmos.DrawLine(rayOrigin, rayOrigin + dir * wallCheckDistance);
+
+        // Ledge Check Gizmo (Vertical)
         Gizmos.color = Color.yellow;
-        Gizmos.DrawLine((Vector2)transform.position + dir * ledgeCheckDistance, (Vector2)transform.position + dir * ledgeCheckDistance + Vector2.down * 1.2f);
+        Vector2 ledgeCheckStart = rayOrigin + dir * ledgeCheckDistance;
+        Gizmos.DrawLine(ledgeCheckStart, ledgeCheckStart + Vector2.down * groundCheckRayLength);
     }
 }
