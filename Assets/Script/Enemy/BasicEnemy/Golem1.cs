@@ -33,11 +33,6 @@ public class Golem1 : GolemBase
             // BẮT BUỘC: Quay mặt về phía Player trước khi tấn công
             core.FaceTarget(core.player.position);
             core.TryAttack();
-            HealthManager hm = core.player.GetComponent<HealthManager>();
-            if (hm != null)
-            {
-                hm.TakeDamage(10);
-            }
         }
         else // Player đã ra khỏi tầm tấn công
         {
@@ -69,8 +64,8 @@ public class Golem1 : GolemBase
             if (prevAttack != isInAttackRange)
             {
                 // Điều chỉnh tốc độ chạy của Player dựa trên việc Golem có đang trong tầm tấn công không
-                if (!isInAttackRange) pm.SetupMove(5f, 7f);
-                else pm.SetupMove(4f, 6f);
+                if (!isInAttackRange) pm.SetupMove(5f, 8f);
+                else pm.SetupMove(3f, 5f);
 
                 prevAttack = isInAttackRange;
             }
@@ -82,6 +77,11 @@ public class Golem1 : GolemBase
     public override void OnAttackHit()
     {
         base.OnAttackHit();
+        HealthManager hm = core.player.GetComponent<HealthManager>();
+        if (hm != null)
+        {
+            hm.TakeDamage(10);
+        }
     }
 
 
@@ -99,7 +99,7 @@ public class Golem1 : GolemBase
         // Khôi phục PlayerMove khi kẻ địch chết
         if (core.player != null && core.player.gameObject.TryGetComponent<PlayerMove>(out PlayerMove pm))
         {
-            pm.SetupMove(5f, 7f);
+            pm.SetupMove(5f, 8f);
         }
     }
 }

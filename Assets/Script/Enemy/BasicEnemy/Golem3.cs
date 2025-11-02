@@ -1,34 +1,111 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
-[RequireComponent(typeof(GolemBase))]
+// Golem3 kế thừa từ GolemBase, chứa logic AI cụ thể cho Golem này.
 public class Golem3 : GolemBase
 {
-    private int baseDamage = -1;
+    // Dùng để theo dõi sự thay đổi trạng thái tấn công nhằm điều chỉnh tốc độ Player
+    private bool prevAttack = false;
 
+    // Biến lưu trữ sát thương cộng thêm cho combo
+    private int damageInterval = 0;
 
-    //protected virtual void Start()
-    //{
-    //    base.Start();
-    //    if (core.attackData != null) baseDamage = core.attackData.damage;
-    //}
-
-
-    protected virtual void Update()
+    protected void Update()
     {
-        if (core.player == null) core.FindPlayer();
-        if (core.player == null) return;
-
-
-        float d = Vector2.Distance(core.transform.position, core.player.position);
-        if (d <= core.attackRange)
+        // --- 1. Kiểm tra An Toàn và Trạng Thái ---
+        if (core == null || core.IsDead || core.IsHurt)
         {
-            if (core.attackData != null && baseDamage > 0) core.attackData.damage = Mathf.CeilToInt(baseDamage * 1.5f);
-            core.TryAttack();
-            if (core.attackData != null && baseDamage > 0) core.attackData.damage = baseDamage; // restore
             return;
         }
-        if (d <= core.chaseDistance) core.SimpleChase(); else core.SimplePatrol();
+
+        if (core.player == null)
+        {
+            core.FindPlayer();
+            if (core.player == null) return;
+        }
+
+        // --- 2. Xác định Khoảng cách và Phạm vi ---
+        float distanceToPlayer = Vector2.Distance(core.transform.position, core.player.position);
+        bool isInAttackRange = distanceToPlayer <= core.attackRange;
+
+        if (isInAttackRange)
+        {
+            // --- HÀNH VI 1: TẤN CÔNG (trong tầm) ---
+            // BẮT BUỘC: Quay mặt về phía Player trước khi tấn công
+            core.FaceTarget(core.player.position);
+            core.TryAttack();
+
+            // LƯU Ý: Sát thương thực tế được xử lý trong OnAttackHit()
+        }
+        else // Player đã ra khỏi tầm tấn công
+        {
+            // Buộc thoát khỏi trạng thái tấn công nếu Player ra khỏi tầm
+            if (core.IsAttacking)
+            {
+                core.EndAttack();
+                // Khôi phục combo damage khi Golem dừng tấn công (hoặc Player thoát tầm)
+                damageInterval = 0;
+            }
+
+            // --- HÀNH VI 2: ĐUỔI THEO hoặc TUẦN TRA ---
+            if (distanceToPlayer <= core.chaseDistance)
+            {
+                // Đuổi theo
+                // BẮT BUỘC: Quay mặt về phía Player khi đuổi theo
+                core.FaceTarget(core.player.position);
+                core.SimpleChase();
+                // Khôi phục combo damage khi Golem chuyển sang đuổi theo
+                damageInterval = 0;
+            }
+            else
+            {
+                // Tuần tra
+                core.SimplePatrol();
+                damageInterval = 0;
+            }
+        }
+
+    }
+
+    // --- Các hàm Override (được gọi từ EnemyCore) ---
+
+    // Hàm này được gọi khi Animation Event tại frame hit xảy ra
+    public override void OnAttackHit()
+    {
+        // 1. Gây sát thương mặc định (sử dụng logic hitbox của core)
+        base.OnAttackHit();
+
+        // 2. Gây sát thương bổ sung theo Combo
+        HealthManager hm = core.player.GetComponent<HealthManager>();
+        if (hm != null)
+        {
+            // Sát thương cơ bản (giả định 10) + Sát thương cộng thêm
+            int totalBonusDamage = damageInterval+10;
+
+            // Chỉ gây sát thương combo nếu Golem đang tấn công (ngăn chặn bug)
+            if (core.IsAttacking)
+            {
+                hm.TakeDamage(totalBonusDamage);
+
+                // Tăng sát thương cho lần tấn công tiếp theo
+                damageInterval += 2;
+                Debug.Log($"Golem hit! Bonus Damage: {totalBonusDamage}. Next Bonus: {damageInterval}");
+            }
+        }
+    }
+
+
+    public override void OnDamaged(DamageInfo info)
+    {
+        base.OnDamaged(info);
+
+        // Đặt lại sát thương combo khi Golem bị thương
+        damageInterval = 0;
+
+    }
+
+
+    public override void OnDied()
+    {
+        base.OnDied();
     }
 }
