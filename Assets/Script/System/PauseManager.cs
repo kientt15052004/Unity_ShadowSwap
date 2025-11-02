@@ -1,15 +1,21 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class PauseManager : MonoBehaviour
 {
     [Header("UI References")]
     [SerializeField] GameObject pauseCanvasRoot;   // PauseCanvas (root)
-    [SerializeField] GameObject pausePanel;        // Panel có 3 nút
-    [SerializeField] GameObject optionsPanel;      // Panel Options (nếu dùng)
+    [SerializeField] GameObject pausePanel;        // Panel chính có 4 nút: Resume, Restart, Options, Quit
+    [SerializeField] GameObject optionsPanel;      // Panel Options chứa thanh trượt âm lượng
     [SerializeField] Image overlayBlocker;         // Image full-screen chặn raycast
+
+    [Header("Options UI")]
+    [SerializeField] Slider musicSlider;
+    [SerializeField] Slider sfxSlider;
+    [SerializeField] Toggle musicToggle;
+    [SerializeField] Toggle sfxToggle;    
 
     [Header("Behavior")]
     [SerializeField] KeyCode toggleKey = KeyCode.Escape;
@@ -28,8 +34,55 @@ public class PauseManager : MonoBehaviour
         _prevFixedDelta = Time.fixedDeltaTime;
         SetPauseUI(false);
 
-        // (An toàn) Đảm bảo OverlayBlocker nằm first-sibling
         if (overlayBlocker) overlayBlocker.transform.SetAsFirstSibling();
+
+        // Gắn sự kiện cho thanh trượt âm thanh nếu có
+        if (musicSlider)
+        {
+            musicSlider.onValueChanged.AddListener(value =>
+            {
+                if (AudioManager.Instance)
+                    AudioManager.Instance.SetMusicVolume(value);
+            });
+        }
+
+        if (sfxSlider)
+        {
+            sfxSlider.onValueChanged.AddListener(value =>
+            {
+                if (AudioManager.Instance)
+                    AudioManager.Instance.SetSFXVolume(value);
+            });
+        }
+        if (musicToggle)
+        {
+            musicToggle.onValueChanged.AddListener(isOn =>
+            {
+                if (AudioManager.Instance)
+                    AudioManager.Instance.ToggleMusic(isOn);
+            });
+        }
+
+        if (sfxToggle)
+        {
+            sfxToggle.onValueChanged.AddListener(isOn =>
+            {
+                if (AudioManager.Instance)
+                    AudioManager.Instance.ToggleSFX(isOn);
+            });
+        }
+    }
+
+    void Start()
+    {
+        // Gán giá trị thanh trượt bằng giá trị hiện tại trong AudioManager
+        if (AudioManager.Instance)
+        {
+            if (musicSlider) musicSlider.value = AudioManager.Instance.musicVolume;
+            if (sfxSlider) sfxSlider.value = AudioManager.Instance.sfxVolume;
+            if (musicToggle) musicToggle.isOn = !AudioManager.Instance.musicSource.mute;
+            if (sfxToggle) sfxToggle.isOn = !AudioManager.Instance.sfxSource.mute;
+        }
     }
 
     void Update()
@@ -52,7 +105,6 @@ public class PauseManager : MonoBehaviour
         _prevTimeScale = Time.timeScale;
         Time.timeScale = 0f;
         Time.fixedDeltaTime = 0f;
-        if (pauseAudio) AudioListener.pause = true;
 
         foreach (var b in disableOnPause) if (b) b.enabled = false;
 
@@ -69,14 +121,21 @@ public class PauseManager : MonoBehaviour
 
         Time.timeScale = _prevTimeScale <= 0f ? 1f : _prevTimeScale;
         Time.fixedDeltaTime = _prevFixedDelta;
-        if (pauseAudio) AudioListener.pause = false;
 
         foreach (var b in disableOnPause) if (b) b.enabled = true;
 
         SetPauseUI(false);
-        // Nếu game cần lock chuột trở lại, bật 2 dòng sau:
         // Cursor.visible = false;
         // Cursor.lockState = CursorLockMode.Locked;
+    }
+
+    public void RestartLevel()
+    {
+        Time.timeScale = 1f;
+        Time.fixedDeltaTime = _prevFixedDelta;
+        if (pauseAudio) AudioListener.pause = false;
+
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     public void OpenOptions()
@@ -84,6 +143,15 @@ public class PauseManager : MonoBehaviour
         if (!optionsPanel || !pausePanel) return;
         optionsPanel.SetActive(true);
         pausePanel.SetActive(false);
+
+        // Cập nhật lại slider khi mở options
+        if (AudioManager.Instance)
+        {
+            if (musicSlider) musicSlider.value = AudioManager.Instance.musicVolume;
+            if (sfxSlider) sfxSlider.value = AudioManager.Instance.sfxVolume;
+            if (musicToggle) musicToggle.isOn = !AudioManager.Instance.musicSource.mute;
+            if (sfxToggle) sfxToggle.isOn = !AudioManager.Instance.sfxSource.mute;
+        }
     }
 
     public void CloseOptions()
@@ -95,7 +163,6 @@ public class PauseManager : MonoBehaviour
 
     public void QuitToMenu()
     {
-        // Khôi phục thời gian trước khi rời scene
         Time.timeScale = 1f;
         Time.fixedDeltaTime = _prevFixedDelta;
         if (pauseAudio) AudioListener.pause = false;
