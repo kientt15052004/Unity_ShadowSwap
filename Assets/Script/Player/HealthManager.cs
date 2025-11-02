@@ -83,6 +83,7 @@ public class HealthManager : MonoBehaviour
 
         if (currentHealth <= 0)
         {
+            currentHealth = 0;
             Die();
         }
     }
