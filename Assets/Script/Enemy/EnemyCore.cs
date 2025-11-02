@@ -2,6 +2,7 @@
 using UnityEngine;
 
 // ------------------------ Shared types (can be moved to separate files) ------------------------
+// (LƯU Ý: Nếu bạn đã tạo IDamageable_Structs.cs, bạn có thể xóa phần này)
 public struct DamageInfo
 {
     public int amount;
@@ -116,6 +117,8 @@ public static class JumpMathUtility
             }
             if (pos.y < start.y - 5f) break;
             t += timeStep;
+            // Dừng nếu đi quá xa theo chiều ngang
+            if (Mathf.Abs(pos.x - start.x) > 10f) break;
         }
         return false;
     }
@@ -172,13 +175,14 @@ public class EnemyCore : MonoBehaviour, IDamageable
     protected bool isDead = false;
     protected bool isAttacking = false;
     protected float lastDirectionChangeAt = -999f;
-    protected float lastJumpAt = -999f; // Đã chuyển lên đây để dùng nhất quán
+    protected float lastJumpAt = -999f;
     private float jumpCooldown = 0.5f;
 
     // KHẮC PHỤC LỖI CS0122: Thêm Public Read-Only Properties
     public bool IsDead => isDead;
     public bool IsHurt => isHurt;
     public bool IsAttacking => isAttacking;
+    public int CurrentHealth => currentHealth;
 
     protected virtual void Awake()
     {
@@ -188,7 +192,8 @@ public class EnemyCore : MonoBehaviour, IDamageable
         {
             Debug.LogError("EnemyCore on " + gameObject.name + " requires an Animator component!");
         }
-        if (GetComponent<IDamageable>() == null) gameObject.AddComponent<Health>();
+        // Gỡ bỏ đoạn code thêm Health vì EnemyCore đã implement IDamageable
+        // if (GetComponent<IDamageable>() == null) gameObject.AddComponent<Health>(); 
 
         currentHealth = maxHealth;
         EnsureGroundCheck();
@@ -215,6 +220,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
 
     protected virtual void FixedUpdate()
     {
+        // Khi chết, bị thương hoặc đang tấn công, không cho di chuyển (chỉ giữ vận tốc Y)
         if (isDead || isHurt || isAttacking)
         {
             rb.velocity = new Vector2(0f, rb.velocity.y);
@@ -243,20 +249,16 @@ public class EnemyCore : MonoBehaviour, IDamageable
         if (wall.collider != null)
         {
             // Điều kiện nhảy tường:
-            // 1. Player phải ở vị trí cao hơn đáng kể (0.4f)
-            // 2. Golem phải đang đứng trên đất
-            // 3. Phải qua cooldown nhảy
             if (player != null && player.position.y > transform.position.y + 0.4f && IsGrounded())
             {
                 if (Time.time > lastJumpAt + jumpCooldown)
                 {
                     TryJump();
-                    lastJumpAt = Time.time; // Cập nhật thời gian nhảy
+                    lastJumpAt = Time.time;
                 }
             }
             else
             {
-                // Nếu không thể/không cần nhảy, đảo hướng
                 ReverseDirection();
             }
         }
@@ -264,19 +266,15 @@ public class EnemyCore : MonoBehaviour, IDamageable
         else if (!groundAhead && IsGrounded())
         {
             // Điều kiện nhảy qua khe hở:
-            // 1. Player phải ở vị trí cao hơn (0.3f)
-            // 2. Player phải trong phạm vi khe hở cho phép (maxJumpableGap)
-            // 3. Phải qua cooldown nhảy
             if (player != null && player.position.y > transform.position.y + 0.3f &&
             Mathf.Abs(player.position.x - transform.position.x) <= maxJumpableGap &&
-            Time.time > lastJumpAt + jumpCooldown) // Dùng jumpCooldown
+            Time.time > lastJumpAt + jumpCooldown)
             {
                 JumpTowardsPlayer();
-                lastJumpAt = Time.time; // Cập nhật thời gian nhảy
+                lastJumpAt = Time.time;
             }
             else
             {
-                // Nếu không thể/không cần nhảy, đảo hướng
                 ReverseDirection();
             }
         }
@@ -363,6 +361,8 @@ public class EnemyCore : MonoBehaviour, IDamageable
         if (isDead) return;
         isHurt = true;
 
+        Debug.Log($"[Enemy Health] {gameObject.name} took {info.amount} damage from {info.source.name}! Remaining Health: {currentHealth}/{maxHealth}");
+
         if (isAttacking)
         {
             isAttacking = false;
@@ -385,11 +385,44 @@ public class EnemyCore : MonoBehaviour, IDamageable
         isDead = true;
         if (anim != null) anim.SetBool("IsDead", true);
         rb.velocity = Vector2.zero;
+
+        // TẮT CHỨC NĂNG DI CHUYỂN CỦA SCRIPT NÀY NHƯNG VẪN CHO ANIMATION EVENT CHẠY
+        this.enabled = true;
+
+        // ** LOẠI BỎ: Không tắt Collider và Destroy ở đây **
+        // var c = GetComponent<Collider2D>();
+        // if (c) c.enabled = false;
+        // Destroy(gameObject, 3f); 
+    }
+
+    // ----------- HÀM MỚI ĐƯỢC GỌI BẰNG ANIMATION EVENT -----------
+
+    // 1. Dùng Animation Event để gọi hàm này ở frame BẮT ĐẦU Death Animation
+    // Tắt các tương tác vật lý nhưng vẫn giữ lại object để Animation chạy
+    public void DisableCollidersAndPhysics()
+    {
+        Debug.Log($"[{gameObject.name}] Physics Disabled. Starting Death Animation.");
+
+        // Tắt Collider chính
         var c = GetComponent<Collider2D>();
         if (c) c.enabled = false;
-        this.enabled = false;
-        Destroy(gameObject, 3f);
+
+        // Tắt Rigidbody để ngăn va chạm và rơi rớt
+        if (rb) rb.bodyType = RigidbodyType2D.Kinematic;
+
+        // Tắt các script khác (trừ script này) nếu cần
+        // Ví dụ: GetComponents<MonoBehaviour>().ToList().ForEach(s => { if (s != this) s.enabled = false; });
     }
+
+    // 2. Dùng Animation Event để gọi hàm này ở frame CUỐI CÙNG của Death Animation
+    public void DestroySelf()
+    {
+        Debug.Log($"[{gameObject.name}] Death Animation finished. Destroying object.");
+        Destroy(gameObject);
+    }
+
+    // ----------- HÀM MỚI ĐƯỢC GỌI BẰNG ANIMATION EVENT -----------
+
 
     // -- utilities --
     public void FindPlayer() { var go = GameObject.FindGameObjectWithTag("Player"); if (go != null) player = go.transform; }

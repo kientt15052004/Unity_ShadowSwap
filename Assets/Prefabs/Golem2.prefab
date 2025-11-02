@@ -18,7 +18,7 @@ GameObject:
   - component: {fileID: 1766203029781730204}
   m_Layer: 0
   m_Name: Golem2
-  m_TagString: Untagged
+  m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -318,7 +318,6 @@ MonoBehaviour:
   rightPoint: {x: 0, y: 0}
   targetPoint: {x: 0, y: 0}
   isFacingRight: 1
-  jumpCooldown: 0.5
 --- !u!114 &1766203029781730204
 MonoBehaviour:
   m_ObjectHideFlags: 0
