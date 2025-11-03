@@ -1,9 +1,12 @@
-﻿using UnityEngine;
+﻿using TMPro;
+using UnityEngine;
+using UnityEngine.SocialPlatforms.Impl;
+using UnityEngine.UI; // Cần thiết cho Image Icons
 
 public class PlayerMove : MonoBehaviour
 {
-    // Cài đặt di chuyển và nhảy
-    [SerializeField] private float speed = 5f;
+    // Cài đặt di chuyển và nhảy
+    [SerializeField] private float speed = 5f;
     [SerializeField] private float jumpHeight = 7f;
 
     private Rigidbody2D body;
@@ -12,37 +15,52 @@ public class PlayerMove : MonoBehaviour
     private bool isBusy = false;
     private bool wasGrounded = true;
 
-    // Kiểm tra mặt đất (Thiết lập trong Inspector)
-    [Header("Ground Check")]
+    // Kiểm tra mặt đất (Thiết lập trong Inspector)
+    [Header("Ground Check")]
     [SerializeField] private Transform groundCheck;
     [SerializeField] private float groundCheckRadius = 0.2f;
     [SerializeField] private LayerMask groundLayer;
 
-    // Footstep settings
-    [Header("Footstep Settings")]
+    // Footstep settings
+    [Header("Footstep Settings")]
     [SerializeField] private float footstepInterval = 0.3f; // khoảng thời gian giữa 2 bước
-    private float footstepTimer;
+    private float footstepTimer;
 
-    // Hurt sound timer
-    [Header("Hurt Sound Settings")]
+    // Hurt sound timer
+    [Header("Hurt Sound Settings")]
     [SerializeField] private float hurtSoundInterval = 1f;
     private float hurtSoundTimer = 0f;
 
-    private ShadowManager shadowManager;
+    // Item Prefabs
+    [Header("Item Prefabs")]
+    [SerializeField] private GameObject redKeyPrefab; // Prefab của Key Đỏ để Instantiate
+
+    private ShadowManager shadowManager;
     private HealthManager healthManager;
     private PlayerAttackController attackController;
     private float horizontalInput;
 
-    // BIẾN THỐNG KÊ
-    private int coinCount;      // Tổng số Coin trong màn chơi
-    private int keyCount;       // Tổng số Key trong màn chơi
-    private int coinScore = 0;  // Điểm số từ Coin (và Key, Chest)
-    private int keyScore = 0;   // Điểm số từ Key (Hiện chưa dùng)
-    private int coinCollected = 0; // Số Coin đã nhặt
-    private int keyCollected = 0;  // Số Key hiện có (Dùng để mở rương)
+    // BIẾN THỐNG KÊ
+    private int coinCount;
+    private int keyCount;
+    private int keyRedCount;
+    private int coinScore = 0;
+    private int coinCollected = 0;
+    private int keyGoldCollected = 0;
+    public int keyRedCollected = 0; // PUBLIC để script Portal có thể kiểm tra
+
+    // UI ICONS & TEXT
+    [Header("Score UI (Text Only)")]
+    public TextMeshProUGUI scoreText;            // Text cho Score (ví dụ: Score: 0)
+
+    [Header("Key UI (Icon + Text)")]
+    [SerializeField] private Image keyGoldIconImage; // Icon Key Vàng
+    public TextMeshProUGUI keyGoldText;          // Text cho số lượng Key Vàng
+    [SerializeField] private Image keyRedIconImage;  // Icon Key Đỏ
+    public TextMeshProUGUI keyRedText;           // Text cho số lượng Key Đỏ
 
 
-    private void Awake()
+    private void Awake()
     {
         body = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
@@ -50,13 +68,10 @@ public class PlayerMove : MonoBehaviour
         healthManager = GetComponent<HealthManager>();
         attackController = GetComponent<PlayerAttackController>();
 
-        // KHỞI TẠO CÁC BIẾN TỔNG SỐ ITEM TẠI ĐÂY
-        coinCount = GameObject.FindGameObjectsWithTag("Coin").Length;
+        // KHỞI TẠO CÁC BIẾN TỔNG SỐ ITEM TẠI ĐÂY
+        coinCount = GameObject.FindGameObjectsWithTag("Coin").Length;
         keyCount = GameObject.FindGameObjectsWithTag("Key").Length;
-
-        // Log để kiểm tra tổng số Item đã tìm thấy
-        Debug.Log("Total Coins in level: " + coinCount);
-        Debug.Log("Total Keys in level: " + keyCount);
+        keyRedCount = GameObject.FindGameObjectsWithTag("KeyRed").Length;
     }
 
     public void SetupMove(float s, float jh)
@@ -65,90 +80,91 @@ public class PlayerMove : MonoBehaviour
         jumpHeight = jh;
     }
 
+
     private void Update()
     {
-        // 1. CẬP NHẬT TRẠNG THÁI GROUNDED 
-        grounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+        // 1. CẬP NHẬT TRẠNG THÁI GROUNDED 
+        grounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
 
         horizontalInput = Input.GetAxis("Horizontal");
 
-        // 2. XỬ LÝ NHẢY
-        if (Input.GetKeyDown(KeyCode.Space) && grounded)
+        // 2. XỬ LÝ NHẢY
+        if (Input.GetKeyDown(KeyCode.Space) && grounded)
         {
             body.velocity = new Vector2(body.velocity.x, jumpHeight);
         }
 
-        // 3. XỬ LÝ SHADOW SWAP
-        if (Input.GetKeyDown(KeyCode.E))
+        // 3. XỬ LÝ SHADOW SWAP
+        if (Input.GetKeyDown(KeyCode.E))
         {
             if (shadowManager != null)
-                // Tạo bóng, truyền kèm localScale để lật đúng chiều
-                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
+                // Tạo bóng, truyền kèm localScale để lật đúng chiều
+                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
         }
 
         if (Input.GetKeyDown(KeyCode.Q))
         {
             if (shadowManager != null)
-                // Dịch chuyển đến bóng
-                shadowManager.TeleportToShadow(transform);
+                // Dịch chuyển đến bóng
+                shadowManager.TeleportToShadow(transform);
         }
 
-        // Phát âm thanh khi vừa chạm đất
-        if (!wasGrounded && grounded)
+        // Phát âm thanh khi vừa chạm đất
+        if (!wasGrounded && grounded)
         {
             AudioManager.Instance?.PlayLand();
         }
 
-        // 2. XỬ LÝ NHẢY
-        if (Input.GetKeyDown(KeyCode.Space) && grounded)
+        // 2. XỬ LÝ NHẢY
+        if (Input.GetKeyDown(KeyCode.Space) && grounded)
         {
             body.velocity = new Vector2(body.velocity.x, jumpHeight);
             AudioManager.Instance?.PlayJump();
         }
 
-        // 3. XỬ LÝ SHADOW SWAP
-        if (Input.GetKeyDown(KeyCode.E))
+        // 3. XỬ LÝ SHADOW SWAP
+        if (Input.GetKeyDown(KeyCode.E))
         {
             if (shadowManager != null)
-                // Tạo bóng, truyền kèm localScale để lật đúng chiều
-                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
+                // Tạo bóng, truyền kèm localScale để lật đúng chiều
+                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
             AudioManager.Instance?.PlayShadowSummon();
         }
 
         if (Input.GetKeyDown(KeyCode.Q))
         {
             if (shadowManager != null)
-                // Dịch chuyển đến bóng
-                shadowManager.TeleportToShadow(transform);
+                // Dịch chuyển đến bóng
+                shadowManager.TeleportToShadow(transform);
             AudioManager.Instance?.PlayShadowSwap();
         }
 
-        // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
+        // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
 
-        // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
-        if (Input.GetKeyDown(KeyCode.F) && grounded)
+        // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
+        if (Input.GetKeyDown(KeyCode.F) && grounded)
         {
             isBusy = true;
             anim.SetTrigger("Attack1");
         }
-        // Attack 2 (Đánh từ trên xuống) - Chỉ khi ở trên không
-        else if (Input.GetKeyDown(KeyCode.G) && !grounded)
+        // Attack 2 (Đánh từ trên xuống) - Chỉ khi ở trên không
+        else if (Input.GetKeyDown(KeyCode.G) && !grounded)
         {
             isBusy = true;
             anim.SetTrigger("Attack2");
         }
-        // Block - Chỉ khi trên mặt đất
-        else if (Input.GetKeyDown(KeyCode.H) && grounded)
+        // Block - Chỉ khi trên mặt đất
+        else if (Input.GetKeyDown(KeyCode.H) && grounded)
         {
             isBusy = true;
             anim.SetTrigger("Block");
         }
 
 
-        // 4. XỬ LÝ HÌNH ẢNH (Animation & Xoay)
-        anim.SetBool("Grounded", grounded); // Grounded nên cập nhật liên tục
+        // 4. XỬ LÝ HÌNH ẢNH (Animation & Xoay)
+        anim.SetBool("Grounded", grounded); // Grounded nên cập nhật liên tục
 
-        anim.SetBool("Run", horizontalInput != 0 && grounded);
+        anim.SetBool("Run", horizontalInput != 0 && grounded);
 
         if (horizontalInput > 0.01f)
         {
@@ -183,8 +199,8 @@ public class PlayerMove : MonoBehaviour
 
     private void CheckHurtSound()
     {
-        // Kiểm tra xem có đang trong trap không
-        Collider2D[] colliders = Physics2D.OverlapCircleAll(transform.position, 0.5f);
+        // Kiểm tra xem có đang trong trap không
+        Collider2D[] colliders = Physics2D.OverlapCircleAll(transform.position, 0.5f);
         bool inTrap = false;
 
         foreach (Collider2D col in colliders)
@@ -208,45 +224,45 @@ public class PlayerMove : MonoBehaviour
         if (isBusy)
         {
             body.velocity = new Vector2(0, body.velocity.y); // Dừng di chuyển ngang
-            return;
+            return;
         }
-        // Di chuyển ngang (Cho phép di chuyển trên không)
-        body.velocity = new Vector2(horizontalInput * speed, body.velocity.y);
+        // Di chuyển ngang (Cho phép di chuyển trên không)
+        body.velocity = new Vector2(horizontalInput * speed, body.velocity.y);
 
-        // Xử lý hurt sound timer
-        if (hurtSoundTimer > 0f)
+        // Xử lý hurt sound timer
+        if (hurtSoundTimer > 0f)
         {
             hurtSoundTimer -= Time.fixedDeltaTime;
         }
     }
 
-    // 5. XỬ LÝ VA CHẠM CỨNG (TRAP)
-    private void OnCollisionEnter2D(Collision2D collision)
+    // 5. XỬ LÝ VA CHẠM CỨNG (TRAP)
+    private void OnCollisionEnter2D(Collision2D collision)
     {
         if (collision.gameObject.CompareTag("Trap"))
         {
             if (healthManager != null)
             {
                 healthManager.TakeDamage(5); // Sát thương tức thời 5
-            }
+            }
             AudioManager.Instance?.PlayHurt();
         }
     }
 
-    // 6. XỬ LÝ SÁT THƯƠNG LIÊN TỤC (OnTriggerStay2D)
-    private void OnTriggerStay2D(Collider2D other)
+    // 6. XỬ LÝ SÁT THƯƠNG LIÊN TỤC (OnTriggerStay2D)
+    private void OnTriggerStay2D(Collider2D other)
     {
         if (other.gameObject.CompareTag("Trap"))
         {
             if (healthManager != null)
             {
                 healthManager.StartContinuousDamage(5); // Sát thương 5 mỗi giây
-            }
+            }
         }
     }
 
-    // 7. DỪNG SÁT THƯƠNG LIÊN TỤC (OnTriggerExit2D)
-    private void OnTriggerExit2D(Collider2D other)
+    // 7. DỪNG SÁT THƯƠNG LIÊN TỤC (OnTriggerExit2D)
+    private void OnTriggerExit2D(Collider2D other)
     {
         if (other.gameObject.CompareTag("Trap"))
         {
@@ -256,10 +272,10 @@ public class PlayerMove : MonoBehaviour
             }
         }
     }
-    // ----------------------------------------------------------------------
-    // 8.ANIMATION EVENTS
-    // Hàm này được gọi bởi Animation Event từ Animator (tại frame hit)
-    public void OnPlayerAttackHit()
+    // ----------------------------------------------------------------------
+    // 8.ANIMATION EVENTS
+    // Hàm này được gọi bởi Animation Event từ Animator (tại frame hit)
+    public void OnPlayerAttackHit()
     {
         if (attackController != null)
         {
@@ -268,64 +284,133 @@ public class PlayerMove : MonoBehaviour
     }
 
 
-    // XỬ LÝ TẤT CẢ ITEM PICKUP (OnTriggerEnter2D)
-    private void OnTriggerEnter2D(Collider2D other)
+    // XỬ LÝ TẤT CẢ ITEM PICKUP (OnTriggerEnter2D)
+    private void OnTriggerEnter2D(Collider2D other)
     {
-        // XỬ LÝ COIN
-        if (other.CompareTag("Coin"))
+        // XỬ LÝ COIN
+        if (other.CompareTag("Coin"))
         {
             coinScore += 1; // 1 điểm mỗi Coin
-            coinCollected += 1;
-            Debug.Log("Coin Collected! Current Score: " + coinScore);
+            coinCollected += 1;
             Destroy(other.gameObject);
+            UpdateScoreUI();
             AudioManager.Instance?.PlayCoin();
         }
-        // XỬ LÝ KEY
-        else if (other.CompareTag("Key"))
+        // XỬ LÝ KEY VÀNG (Tag: "Key")
+        else if (other.CompareTag("Key"))
         {
-            keyCollected += 1;  // Tăng số lượng Key hiện có
-            coinScore += 10;    // +10 điểm Coin
-
-            Debug.Log("Key Collected! Total Keys: " + keyCollected + ". Coin Score: " + coinScore);
-            Destroy(other.gameObject);
+            keyGoldCollected += 1;  // Tăng số lượng Key Vàng hiện có
+            coinScore += 10;        // +10 điểm Coin
+            Destroy(other.gameObject);
+            UpdateScoreUI();
+            UpdateKeyGoldUI();
             AudioManager.Instance?.PlayKey();
 
         }
-        // XỬ LÝ HEAL
-        else if (other.CompareTag("Heal"))
+        // XỬ LÝ KEY ĐỎ (Tag: "KeyRed")
+        else if (other.CompareTag("KeyRed"))
+        {
+            keyRedCollected += 1;  // Tăng số lượng Key Đỏ hiện có
+            // Key Đỏ không tăng điểm
+            Destroy(other.gameObject);
+            UpdateScoreUI();
+            UpdateKeyRedUI();
+            AudioManager.Instance?.PlayKey();
+        }
+        // XỬ LÝ HEAL
+        else if (other.CompareTag("Heal"))
         {
             if (healthManager != null)
             {
                 healthManager.Heal(20); // Hồi cố định 20 máu
-                AudioManager.Instance?.PlayHeal();
+                AudioManager.Instance?.PlayHeal();
 
             }
             Destroy(other.gameObject);
         }
-        // XỬ LÝ CHEST
-        else if (other.CompareTag("Chest"))
+        // XỬ LÝ CHEST
+        else if (other.CompareTag("Chest"))
         {
-            if (keyCollected > 0)
+            // Dùng Key Vàng để mở
+            if (keyGoldCollected > 0)
             {
-                keyCollected--;
-                coinScore += 20; // +20 điểm Coin khi mở Rương
+                if (redKeyPrefab != null) // Kiểm tra Prefab Key Đỏ
+                {
+                    keyGoldCollected--;
+                    coinScore += 20; // +20 điểm Coin khi mở Rương
 
-                Debug.Log("Chest Opened! Keys remaining: " + keyCollected + ". Coin Score: " + coinScore);
-                AudioManager.Instance?.PlayUnlockChest();
-                // Giả định rương biến mất sau khi mở và nhận thưởng
-                Destroy(other.gameObject);
+                    // TẠO (INSTANTIATE) KEY ĐỎ TẠI VỊ TRÍ RƯƠNG
+                    Instantiate(redKeyPrefab, other.transform.position, Quaternion.identity);
+
+                    AudioManager.Instance?.PlayUnlockChest();
+
+                    // Giả định rương biến mất sau khi mở và nhận thưởng
+                    Destroy(other.gameObject);
+                    UpdateScoreUI();
+                    UpdateKeyGoldUI();
+                }
+                else
+                {
+                    Debug.LogError("Red Key Prefab is not assigned in the Inspector!");
+                }
             }
             else
             {
-                Debug.Log("Chest is locked! Need a key.");
+
             }
         }
     }
 
-    // 9.ANIMATION EVENTS
-    // Hàm này phải được gọi bằng Animation Event 
-    // tại FRAME CUỐI CÙNG của các animation "Attack1", "Attack2", và "Block"
-    public void AnimationFinished()
+    // HÀM CẬP NHẬT UI
+    // Cập nhật Score (Giữ nguyên Text)
+    private void UpdateScoreUI()
+    {
+        // Quay lại cấu trúc Text ban đầu: "Score: [số điểm]"
+        scoreText.text = "Score: " + coinScore;
+    }
+
+    // Cập nhật Key Vàng (Key Vàng Icon + Key Vàng Text)
+    private void UpdateKeyGoldUI()
+    {
+        if (keyGoldText != null)
+        {
+            keyGoldText.text = keyGoldCollected.ToString();
+        }
+        if (keyGoldIconImage != null)
+        {
+            keyGoldIconImage.gameObject.SetActive(true);
+        }
+    }
+
+    // Cập nhật Key Đỏ (Key Đỏ Icon + Key Đỏ Text)
+    private void UpdateKeyRedUI()
+    {
+        if (keyRedText != null)
+        {
+            keyRedText.text = keyRedCollected.ToString();
+        }
+        if (keyRedIconImage != null)
+        {
+            keyRedIconImage.gameObject.SetActive(true);
+        }
+    }
+
+    // HÀM MỚI: DÙNG KEY ĐỎ (GỌI BỞI PORTAL)
+    public void UseRedKey()
+    {
+        if (keyRedCollected > 0)
+        {
+            keyRedCollected--;
+            UpdateKeyRedUI();
+            // Thêm AudioManager.Instance?.Play...() cho âm thanh sử dụng Key nếu cần
+        }
+    }
+
+
+    // 9.ANIMATION EVENTS
+    // Hàm này phải được gọi bằng Animation Event 
+    // tại FRAME CUỐI CÙNG của các animation "Attack1", "Attack2", và "Block"
+    public void AnimationFinished()
     {
         isBusy = false;
     }
