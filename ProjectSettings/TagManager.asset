@@ -13,6 +13,8 @@ TagManager:
   - Heal
   - Key
   - Enemy
+  - Undefined
+  - KeyRed
   layers:
   - Default
   - TransparentFX
