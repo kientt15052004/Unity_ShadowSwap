@@ -177,14 +177,12 @@ public class EnemyCore : MonoBehaviour, IDamageable
     protected float lastDirectionChangeAt = -999f;
     protected float lastJumpAt = -999f;
     private float jumpCooldown = 0.5f;
-    protected bool isBlocking = false;
 
     // KHẮC PHỤC LỖI CS0122: Thêm Public Read-Only Properties
     public bool IsDead => isDead;
     public bool IsHurt => isHurt;
     public bool IsAttacking => isAttacking;
     public int CurrentHealth => currentHealth;
-    public bool IsBlocking => isBlocking;
 
     protected virtual void Awake()
     {
@@ -352,19 +350,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
     {
         if (isDead) return;
         if (Time.time < lastHitAt + invincibilityTime) return;
-        // >> LOGIC ĐỠ ĐÒN <<
-        if (isBlocking)
-        {
-            // Tắt bị thương và animation Hurt
-            isHurt = false;
-            if (anim != null) anim.SetBool("IsHurt", false);
-
-            Debug.Log($"[{gameObject.name}] Blocked {info.amount} damage!");
-            // Giảm sát thương nhận vào (Ví dụ: 80% giảm sát thương)
-            info.amount = Mathf.RoundToInt(info.amount * 0.2f);
-            // Có thể thêm hiệu ứng/âm thanh chặn ở đây
-        }
-            lastHitAt = Time.time;
+        lastHitAt = Time.time;
         currentHealth -= info.amount;
         OnTakeDamageLocal(info);
         if (currentHealth <= 0) OnDieLocal();
@@ -468,7 +454,6 @@ public class EnemyCore : MonoBehaviour, IDamageable
         anim.SetBool("IsAttacking", isAttacking);
         anim.SetBool("IsHurt", isHurt);
         anim.SetBool("IsDead", isDead);
-        anim.SetBool("IsBlocking", isBlocking);
         anim.SetBool("IsJumping", !IsGrounded() && rb.velocity.y > 0.05f);
         anim.SetBool("Run", IsGrounded() && Mathf.Abs(rb.velocity.x) > 0.1f);
     }

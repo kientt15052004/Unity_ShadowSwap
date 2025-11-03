@@ -142,19 +142,19 @@ public class PlayerMove : MonoBehaviour
         // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
 
         // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
-        if (Input.GetKeyDown(KeyCode.J) && grounded)
+        if (Input.GetKeyDown(KeyCode.F) && grounded)
         {
             isBusy = true;
             anim.SetTrigger("Attack1");
         }
         // Attack 2 (Đánh từ trên xuống) - Chỉ khi ở trên không
-        else if (Input.GetKeyDown(KeyCode.K) && !grounded)
+        else if (Input.GetKeyDown(KeyCode.G) && !grounded)
         {
             isBusy = true;
             anim.SetTrigger("Attack2");
         }
         // Block - Chỉ khi trên mặt đất
-        else if (Input.GetKeyDown(KeyCode.L) && grounded)
+        else if (Input.GetKeyDown(KeyCode.H) && grounded)
         {
             isBusy = true;
             anim.SetTrigger("Block");
