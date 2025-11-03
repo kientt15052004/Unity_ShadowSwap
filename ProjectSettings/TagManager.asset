@@ -14,7 +14,6 @@ TagManager:
   - Key
   - Enemy
   - Undefined
-  - KeyRed
   layers:
   - Default
   - TransparentFX
