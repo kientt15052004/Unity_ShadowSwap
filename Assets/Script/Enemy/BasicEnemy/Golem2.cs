@@ -14,11 +14,7 @@ public class Golem2 : GolemBase
     protected void Update()
     {
         // --- 1. Kiểm tra An Toàn và Trạng Thái ---
-        if (core != null)
-        {
-            core.UpdateAnimationFlags();
-        }
-        if (core.IsDead || core.IsHurt)
+        if (core == null || core.IsDead || core.IsHurt)
         {
             return;
         }
@@ -53,14 +49,13 @@ public class Golem2 : GolemBase
             {
                 // Đuổi theo
                 // BẮT BUỘC: Quay mặt về phía Player khi đuổi theo
+                core.FaceTarget(core.player.position);
                 core.SimpleChase();
-                core.FlipByVelocity();
             }
             else
             {
                 // Tuần tra
                 core.SimplePatrol();
-                core.FlipByVelocity();
             }
         }
     }
