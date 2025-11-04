@@ -81,7 +81,7 @@ public class HealthManager : MonoBehaviour
         // Kích hoạt hàm DisableInvincibility sau một khoảng thời gian
         Invoke("DisableInvincibility", invincibilityDuration);
 
-        if (currentHealth <= 0)
+        if (currentHealth < 0)
         {
             currentHealth = 0;
             Die();
