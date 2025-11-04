@@ -2,6 +2,7 @@
 using UnityEngine;
 
 // ------------------------ Shared types (can be moved to separate files) ------------------------
+// (LƯU Ý: Nếu bạn đã tạo IDamageable_Structs.cs, bạn có thể xóa phần này)
 public struct DamageInfo
 {
     public int amount;
@@ -133,14 +134,10 @@ public class EnemyCore : MonoBehaviour, IDamageable
     public float chaseDistance = 8f;
     public float chaseSpeed = 4f;
 
-    // ĐÃ TĂNG LỰC NHẢY
-    public float jumpForce = 12f; // Tăng từ 7f lên 12f
-    public float jumpCooldown = 0.5f;
 
-    [Header("Detection")]
-    public Vector2 wallCheckSize = new Vector2(0.5f, 1.0f); // Kiểm tra rộng hơn
     public float wallCheckDistance = 0.6f;
     public float ledgeCheckDistance = 0.6f;
+    public float jumpForce = 7f;
     public LayerMask groundLayer;
     public Transform groundCheck;
     public float groundCheckRadius = 0.12f;
@@ -179,6 +176,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
     protected bool isAttacking = false;
     protected float lastDirectionChangeAt = -999f;
     protected float lastJumpAt = -999f;
+    private float jumpCooldown = 0.5f;
     protected bool isBlocking = false;
 
     // KHẮC PHỤC LỖI CS0122: Thêm Public Read-Only Properties
@@ -196,6 +194,8 @@ public class EnemyCore : MonoBehaviour, IDamageable
         {
             Debug.LogError("EnemyCore on " + gameObject.name + " requires an Animator component!");
         }
+        // Gỡ bỏ đoạn code thêm Health vì EnemyCore đã implement IDamageable
+        // if (GetComponent<IDamageable>() == null) gameObject.AddComponent<Health>(); 
 
         currentHealth = maxHealth;
         EnsureGroundCheck();
@@ -238,38 +238,24 @@ public class EnemyCore : MonoBehaviour, IDamageable
 
         Vector2 dir = isFacingRight ? Vector2.right : Vector2.left;
 
-        // Origin cho BoxCast và Raycast
         Vector2 baseOrigin = groundCheck != null ? (Vector2)groundCheck.position : (Vector2)transform.position;
-        // Đặt BoxCast ở vị trí giữa, sử dụng tâm của Collider (thay vì groundCheck) để kiểm tra tường
-        Vector2 castOrigin = (Vector2)transform.position;
+        Vector2 rayOrigin = baseOrigin + (Vector2.up * 0.1f);
         float groundCheckRayLength = 1.2f + 0.1f;
 
-        // --- SỬ DỤNG BOXCAST ĐỂ KIỂM TRA TƯỜNG RỘNG HƠN ---
-        // BoxCast bắt đầu từ tâm quái vật, cast theo hướng dir, với kích thước wallCheckSize và khoảng cách wallCheckDistance
-        RaycastHit2D wall = Physics2D.BoxCast(
-            castOrigin,
-            wallCheckSize,
-            0f, // angle
-            dir,
-            wallCheckDistance,
-            groundLayer
-        );
+        RaycastHit2D wall = Physics2D.Raycast(rayOrigin, dir, wallCheckDistance, groundLayer);
 
-
-        // Vị trí kiểm tra vách đá (vẫn dùng raycast để check mặt đất)
-        Vector2 ledgeCheckStart = baseOrigin + dir * ledgeCheckDistance;
+        Vector2 ledgeCheckStart = rayOrigin + dir * ledgeCheckDistance;
         bool groundAhead = Physics2D.Raycast(ledgeCheckStart, Vector2.down, groundCheckRayLength, groundLayer);
 
-        // --- XỬ LÝ KHI GẶP TƯỜNG (BOXCAST) ---
+        // --- XỬ LÝ KHI GẶP TƯỜNG ---
         if (wall.collider != null)
         {
-            // Điều kiện nhảy tường: Player đang ở vị trí cao hơn và quái vật đang đứng trên mặt đất
+            // Điều kiện nhảy tường:
             if (player != null && player.position.y > transform.position.y + 0.4f && IsGrounded())
             {
                 if (Time.time > lastJumpAt + jumpCooldown)
                 {
-                    // ĐÃ CẬP NHẬT: Nhảy và tiến về phía người chơi
-                    JumpTowardsPlayer();
+                    TryJump();
                     lastJumpAt = Time.time;
                 }
             }
@@ -286,7 +272,6 @@ public class EnemyCore : MonoBehaviour, IDamageable
             Mathf.Abs(player.position.x - transform.position.x) <= maxJumpableGap &&
             Time.time > lastJumpAt + jumpCooldown)
             {
-                // ĐÃ CẬP NHẬT: Nhảy và tiến về phía người chơi
                 JumpTowardsPlayer();
                 lastJumpAt = Time.time;
             }
@@ -360,17 +345,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
     }
 
     public void TryJump() { if (IsGrounded()) rb.velocity = new Vector2(rb.velocity.x, jumpForce); }
-
-    // CẬP NHẬT: Sử dụng chaseSpeed cho tốc độ ngang khi nhảy đuổi theo
-    public void JumpTowardsPlayer()
-    {
-        if (IsGrounded() && player != null)
-        {
-            Vector2 dir = ((Vector2)player.position - (Vector2)transform.position).normalized;
-            // Tốc độ ngang sử dụng chaseSpeed, tốc độ dọc là jumpForce mới
-            rb.velocity = new Vector2(dir.x * chaseSpeed, jumpForce);
-        }
-    }
+    public void JumpTowardsPlayer() { if (IsGrounded() && player != null) { Vector2 dir = ((Vector2)player.position - (Vector2)transform.position).normalized; rb.velocity = new Vector2(dir.x * patrolSpeed, jumpForce); } }
 
     // -- damage / health handling --
     public virtual void TakeDamage(DamageInfo info)
@@ -389,7 +364,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
             info.amount = Mathf.RoundToInt(info.amount * 0.2f);
             // Có thể thêm hiệu ứng/âm thanh chặn ở đây
         }
-        lastHitAt = Time.time;
+            lastHitAt = Time.time;
         currentHealth -= info.amount;
         OnTakeDamageLocal(info);
         if (currentHealth <= 0) OnDieLocal();
@@ -427,6 +402,11 @@ public class EnemyCore : MonoBehaviour, IDamageable
 
         // TẮT CHỨC NĂNG DI CHUYỂN CỦA SCRIPT NÀY NHƯNG VẪN CHO ANIMATION EVENT CHẠY
         this.enabled = true;
+
+        // ** LOẠI BỎ: Không tắt Collider và Destroy ở đây **
+        // var c = GetComponent<Collider2D>();
+        // if (c) c.enabled = false;
+        // Destroy(gameObject, 3f); 
     }
 
     // ----------- HÀM MỚI ĐƯỢC GỌI BẰNG ANIMATION EVENT -----------
@@ -443,6 +423,9 @@ public class EnemyCore : MonoBehaviour, IDamageable
 
         // Tắt Rigidbody để ngăn va chạm và rơi rớt
         if (rb) rb.bodyType = RigidbodyType2D.Kinematic;
+
+        // Tắt các script khác (trừ script này) nếu cần
+        // Ví dụ: GetComponents<MonoBehaviour>().ToList().ForEach(s => { if (s != this) s.enabled = false; });
     }
 
     // 2. Dùng Animation Event để gọi hàm này ở frame CUỐI CÙNG của Death Animation
@@ -507,19 +490,17 @@ public class EnemyCore : MonoBehaviour, IDamageable
 
         Vector2 dir = isFacingRight ? Vector2.right : Vector2.left;
 
-        // Wall Check Gizmo (BoxCast)
-        Gizmos.color = Color.red;
-        // Tính toán vị trí tâm của BoxCast để trực quan hóa
-        Vector2 castOrigin = (Vector2)transform.position;
-        Vector2 boxCenter = castOrigin + dir * wallCheckDistance;
-        Gizmos.DrawWireCube(boxCenter, wallCheckSize);
-
-
-        // Ledge Check Gizmo (Vertical Raycast)
         Vector2 baseOrigin = groundCheck != null ? (Vector2)groundCheck.position : (Vector2)transform.position;
+        Vector2 rayOrigin = baseOrigin + (Vector2.up * 0.1f);
         float groundCheckRayLength = 1.3f;
+
+        // Wall Check Gizmo (Horizontal)
+        Gizmos.color = Color.red;
+        Gizmos.DrawLine(rayOrigin, rayOrigin + dir * wallCheckDistance);
+
+        // Ledge Check Gizmo (Vertical)
         Gizmos.color = Color.yellow;
-        Vector2 ledgeCheckStart = baseOrigin + dir * ledgeCheckDistance;
+        Vector2 ledgeCheckStart = rayOrigin + dir * ledgeCheckDistance;
         Gizmos.DrawLine(ledgeCheckStart, ledgeCheckStart + Vector2.down * groundCheckRayLength);
     }
 }

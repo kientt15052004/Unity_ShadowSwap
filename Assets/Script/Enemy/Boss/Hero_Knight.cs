@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
-using System.Collections;
+using System.Collections; // Cần thiết cho Coroutine
 
-// BossSentinel kế thừa từ EnemyCore
+// BossSentinel kế thừa từ EnemyCore (thay vì GolemBase, giả định GolemBase là lớp rỗng)
 public class Hero_Knight : EnemyCore
 {
     [Header("Boss Stats")]
@@ -18,11 +18,6 @@ public class Hero_Knight : EnemyCore
     public float actionCooldown = 0.5f;
     private float lastActionTime = -999f;
 
-    [Header("Defense Detection")]
-    public float playerAttackPredictionRange = 1.5f; // Phạm vi Boss dự đoán Player sắp tấn công
-    // public float playerAttackCooldownTime = 0.5f; // (Thêm nếu có thể truy cập cooldown của Player)
-
-
     private Vector2 initialPosition;
 
     protected override void Awake()
@@ -30,11 +25,7 @@ public class Hero_Knight : EnemyCore
         base.Awake();
         // Áp dụng chỉ số Boss
         maxHealth = bossMaxHealth;
-        // Kiểm tra null cho attackData trước khi truy cập
-        if (attackData != null)
-        {
-            attackData.damage = bossDamage;
-        }
+        attackData.damage = bossDamage;
         currentHealth = maxHealth;
 
         initialPosition = transform.position;
@@ -47,18 +38,14 @@ public class Hero_Knight : EnemyCore
         patrolDistance = patrolRadius;
     }
 
-    protected override void Update()
+
+    protected void Update()
     {
-        // Bắt buộc gọi base.Update() để EnemyCore xử lý các cờ chung
-        base.Update();
-
-        // --- 1. Kiểm tra Phòng thủ Chủ động (Smart Defense) ---
-        CheckPreemptiveDefense();
-
-        // --- 2. Kiểm tra An Toàn và Trạng Thái ---
-        if (IsDead || IsHurt || IsBlocking || IsAttacking)
+        // --- 1. Kiểm tra An Toàn và Trạng Thái ---
+        if (IsDead || IsHurt || IsBlocking)
         {
-            // Nếu chết, bị thương, đang chặn hoặc đang tấn công, dừng AI
+            // Nếu chết, bị thương hoặc đang đỡ đòn, không thực hiện AI
+            UpdateAnimationFlags();
             return;
         }
 
@@ -68,89 +55,100 @@ public class Hero_Knight : EnemyCore
             if (player == null) return;
         }
 
-        // --- 3. Logic AI Chính (Tấn công / Chase) ---
+        // --- 2. Logic AI Chính ---
         float distanceToPlayer = Vector2.Distance(transform.position, player.position);
 
-        // A. QUAY MẶT VÀO PLAYER
+        // A. QUAY MẶT VÀO PLAYER (Boss luôn nhìn Player)
         FaceTarget(player.position);
 
         // B. HÀNH VI TẤN CÔNG / CHASE
         if (distanceToPlayer <= chaseDistance)
         {
-            // B1. Trong tầm tấn công (sát thương)
+            // B1. Trong tầm tấn công
             if (distanceToPlayer <= attackRange)
             {
                 // Ngừng di chuyển khi ở đủ gần để tấn công
                 rb.velocity = new Vector2(0f, rb.velocity.y);
-                TryAttack(); // Kích hoạt tấn công
+                TryAttack();
             }
-            // B2. Đuổi theo
+            // B2. Đuổi theo / Giữ khoảng cách
             else
             {
-                SimpleChase();
+                // Nếu không đang tấn công, đuổi theo
+                if (!IsAttacking)
+                {
+                    SimpleChase();
+                }
             }
         }
         else
         {
-            // C. HÀNH VI ĐỨNG YÊN
+            // C. HÀNH VI ĐỨNG YÊN (KHÔNG TUẦN TRA)
+            // Nếu Player quá xa, Boss đứng yên và reset vị trí gần tâm Arena (nếu cần)
             rb.velocity = new Vector2(0f, rb.velocity.y);
-            if (anim != null) anim.SetBool("Run", false);
+            // Giữ trạng thái Run = false khi đứng yên
+            anim.SetBool("Run", false);
         }
+
+        // --- 3. Cập nhật Animation ---
+        UpdateAnimationFlags();
     }
 
-    // HÀM MỚI: Kiểm tra và kích hoạt phòng thủ chủ động
-    private void CheckPreemptiveDefense()
+    // HÀM XỬ LÝ NÉ ĐÒN VÀ ĐỠ ĐÒN (Được gọi khi bị tấn công)
+    protected override void OnTakeDamageLocal(DamageInfo info)
     {
-        if (player == null || IsDead || IsHurt || IsBlocking || IsAttacking) return;
-        if (Time.time < lastActionTime + actionCooldown) return;
+        if (IsDead) return;
 
-        float distanceToPlayer = Vector2.Distance(transform.position, player.position);
-
-        // Điều kiện dự đoán: Player ở rất gần (có khả năng sắp tấn công)
-        if (distanceToPlayer <= playerAttackPredictionRange)
+        // --- LOGIC DI CHUYỂN LINH HOẠT VÀ ĐỠ ĐÒN ---
+        if (Time.time < lastActionTime + actionCooldown)
         {
-            // Đặt cooldown hành động ngay lập tức để tránh lặp lại
-            lastActionTime = Time.time;
-
-            if (Random.value < blockChance)
-            {
-                // Trigger Block
-                StartCoroutine(BlockRoutine());
-            }
-            else // Trigger Dodge
-            {
-                // Dodge based on player's position
-                StartCoroutine(DodgeRoutine(player.position));
-            }
+            // Nếu đang trong cooldown, chỉ chịu sát thương bình thường
+            base.OnTakeDamageLocal(info);
+            return;
         }
+
+        // Tỉ lệ chặn
+        if (Random.value < blockChance)
+        {
+            StartCoroutine(BlockRoutine());
+        }
+        else // Tỉ lệ né
+        {
+            StartCoroutine(DodgeRoutine(info.origin));
+        }
+
+        lastActionTime = Time.time;
     }
 
-    // --- Coroutine Đỡ Đòn ---
+    // Coroutine Đỡ Đòn
     private IEnumerator BlockRoutine()
     {
         isBlocking = true;
         rb.velocity = Vector2.zero;
 
-        // Phát animation chặn (Giả sử có trigger "Block" trong Animator)
-        if (anim != null) anim.SetTrigger("Block");
+        // Phát animation chặn
+        anim.SetTrigger("Block");
 
         yield return new WaitForSeconds(blockDuration);
 
         isBlocking = false;
-        if (anim != null) anim.SetBool("IsBlocking", false); // Tắt cờ nếu animation không tự tắt
+        // Bắt đầu lại Coroutine Hurt thông thường sau khi chặn xong nếu vẫn bị thương.
+        // Tuy nhiên, vì logic TakeDamage đã xử lý sát thương giảm, ta chỉ cần thoát
     }
 
-    // --- Coroutine Né Đòn ---
+    // Coroutine Né Đòn
     private IEnumerator DodgeRoutine(Vector2 attackOrigin)
     {
-        isHurt = true; // Dùng cờ Hurt để ngăn AI di chuyển trong thời gian né
-        if (anim != null) anim.SetTrigger("Dodge"); // Phát animation né (Giả sử có trigger "Dodge")
+        isHurt = true; // Sử dụng cờ Hurt để ngăn AI di chuyển
 
         // Xác định hướng lùi lại (ngược lại với hướng tấn công)
         float directionToDodge = Mathf.Sign(transform.position.x - attackOrigin.x);
 
         // Lùi lại
         rb.velocity = new Vector2(directionToDodge * (chaseSpeed * 1.5f), rb.velocity.y);
+
+        // Phát animation né (ví dụ: Hurt)
+        anim.SetTrigger("Dodge");
 
         yield return new WaitForSeconds(dodgeDuration);
 
@@ -163,45 +161,38 @@ public class Hero_Knight : EnemyCore
 
         rb.velocity = new Vector2(0f, rb.velocity.y);
         isHurt = false;
-        if (anim != null) anim.SetBool("IsHurt", false); // Tắt cờ Hurt nếu nó được dùng cho Dodge
     }
 
+    // --- LOGIC CỔNG (Gate Blocking) ---
 
-    // --- Override cho OnTakeDamageLocal (Xử lý khi sát thương thực sự được nhận) ---
-    protected override void OnTakeDamageLocal(DamageInfo info)
+    // HÀM MỚI: Dùng để ngăn Player di chuyển đến cổng
+    // Cần gọi hàm này từ một script quản lý cổng hoặc đặt cổng
+    // (Giả sử bạn có một script GateManager)
+    public void PreventPlayerMovement(GameObject gate)
     {
-        if (IsDead) return;
-
-        // Nếu isBlocking là TRUE, điều đó có nghĩa là:
-        // 1. Boss đã kích hoạt BlockRoutine (Phòng thủ chủ động) HOẶC
-        // 2. Boss đã bị đánh trong khi đang Block (Block thành công)
-        // Trong cả hai trường hợp, không muốn gọi HurtRoutine của base
-        if (isBlocking)
+        // Tìm PlayerMove script
+        if (player != null && player.TryGetComponent<PlayerMove>(out PlayerMove pm))
         {
-            // Do EnemyCore.TakeDamage đã giảm sát thương, ở đây ta chỉ cần log và không làm gì thêm
-            Debug.Log($"[{gameObject.name}] Block successful! Reduced {info.amount} damage.");
-            // Có thể thêm hiệu ứng/âm thanh chặn ở đây
-            return;
+            // Nếu PlayerMove có hàm để vô hiệu hóa di chuyển
+            // pm.DisableMovement(); 
+            // Hoặc đơn giản là giảm tốc độ Player về 0 khi ở gần cổng
         }
 
-        // Nếu không chặn/né (isBlocking = false), gọi base để xử lý sát thương bình thường (HurtRoutine)
-        base.OnTakeDamageLocal(info);
+        // Tùy chọn: Có thể spawn một bức tường vô hình (Invisible Wall) tại vị trí cổng
+        // Collider2D gateCollider = gate.GetComponent<Collider2D>();
+        // if (gateCollider != null) gateCollider.enabled = true;
     }
 
-    // --- Override cho OnDied (Xử lý cổng khi Boss chết) ---
+    // --- Override cho OnDied ---
     protected override void OnDieLocal()
     {
         // Khi Boss chết, khôi phục tốc độ Player (nếu có)
-        // Lưu ý: Cần có script PlayerMove để đoạn code này hoạt động
-        /*
         if (player != null && player.gameObject.TryGetComponent<PlayerMove>(out PlayerMove pm))
         {
-            // Giả định PlayerMove có phương thức SetupMove(float speed, float jumpForce)
             pm.SetupMove(5f, 8f);
         }
-        */
 
-        // Thực hiện logic chết của EnemyCore (Set isDead, Animation, v.v.)
+        // Thực hiện logic chết của EnemyCore
         base.OnDieLocal();
     }
 }
