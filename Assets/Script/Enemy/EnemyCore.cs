@@ -364,7 +364,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
             info.amount = Mathf.RoundToInt(info.amount * 0.2f);
             // Có thể thêm hiệu ứng/âm thanh chặn ở đây
         }
-        lastHitAt = Time.time;
+            lastHitAt = Time.time;
         currentHealth -= info.amount;
         OnTakeDamageLocal(info);
         if (currentHealth <= 0) OnDieLocal();
