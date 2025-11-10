@@ -59,6 +59,7 @@ public class PlayerMove : MonoBehaviour
     [SerializeField] private Image keyRedIconImage;  // Icon Key Đỏ
     public TextMeshProUGUI keyRedText;           // Text cho số lượng Key Đỏ
 
+    public bool isBlocking = false;
 
     private void Awake()
     {
@@ -380,6 +381,23 @@ public class PlayerMove : MonoBehaviour
         {
             keyGoldIconImage.gameObject.SetActive(true);
         }
+    }
+
+    public void StartBlock()
+    {
+        isBlocking = true;
+    }
+
+    // Tắt block (gọi từ Animation Event frame cuối)
+    public void EndBlock()
+    {
+        isBlocking = false;
+        isBusy = false; // Kết thúc trạng thái bận
+    }
+
+    public bool IsBlocking()
+    {
+        return isBlocking;
     }
 
     // Cập nhật Key Đỏ (Key Đỏ Icon + Key Đỏ Text)
