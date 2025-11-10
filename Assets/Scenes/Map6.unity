@@ -847,7 +847,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: Golem2 (3)
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 1766203029781730204, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
   m_SourcePrefab: {fileID: 100100000, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
 --- !u!4 &30706514 stripped
 Transform:
@@ -2590,7 +2591,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: Golem2
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 1766203029781730204, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
   m_SourcePrefab: {fileID: 100100000, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
 --- !u!4 &333015625 stripped
 Transform:
@@ -3825,7 +3827,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: Golem2
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 1766203029781730204, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
   m_SourcePrefab: {fileID: 100100000, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
 --- !u!4 &635830480 stripped
 Transform:
@@ -4400,7 +4403,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: Golem2 (1)
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 1766203029781730204, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
   m_SourcePrefab: {fileID: 100100000, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
 --- !u!4 &806688160 stripped
 Transform:
@@ -8761,7 +8765,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: Golem2
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 1766203029781730204, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
   m_SourcePrefab: {fileID: 100100000, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
 --- !u!4 &1698788844 stripped
 Transform:
@@ -9682,7 +9687,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: Golem2 (2)
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 1766203029781730204, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
   m_SourcePrefab: {fileID: 100100000, guid: b0d4b485f789ef748a5cdf9cee9f6798, type: 3}
 --- !u!4 &1867793790 stripped
 Transform:

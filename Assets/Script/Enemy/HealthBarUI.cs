@@ -10,19 +10,23 @@ public class HealthBarUI : MonoBehaviour
     public Image backgroundImage;
     public TextMeshProUGUI healthText;
 
-    [Header("Loss Effect")] // Thêm phần này
-    public Image lossImage; // Thanh màu trắng (hoặc màu khác) hiển thị lượng máu sắp mất
-    public float lossSpeed = 0.5f; // Tốc độ thanh mất máu chạy
+    [Header("Loss Effect")]
+    public Image lossImage;
+    public float lossSpeed = 0.5f;
 
     [Header("Positioning")]
-    public Vector3 localOffset = new Vector3(0f, 1.5f, 0f); // mặc định cao hơn 1.2 -> 1.5
+    public Vector3 localOffset = new Vector3(0f, 1.5f, 0f);
     public bool faceCamera = true;
 
     [Header("Show / Hide")]
-    public bool showOnlyOnDamage = true;      // nếu true -> ẩn ban đầu, chỉ hiện khi có damage
-    public float visibleDuration = 3.0f;     // hiển trong bao nhiêu giây sau khi nhận damage
-    public Color inactiveBackgroundColor = Color.white; // màu background khi ẩn (phần mất đi hiện màu trắng)
-    public Color activeBackgroundColor = new Color(0f, 0f, 0f, 0.6f); // mặc định
+    public bool showOnlyOnDamage = true;
+    public float visibleDuration = 3.0f;
+    public Color inactiveBackgroundColor = Color.white;
+    public Color activeBackgroundColor = new Color(0f, 0f, 0f, 0.6f);
+
+    [Header("Behavior tweaks")]
+    public bool freezeFillUntilDead = true;
+    public bool showHealthTextEvenWhenFrozen = false;
 
     // internals
     private int maxHealth;
@@ -32,40 +36,166 @@ public class HealthBarUI : MonoBehaviour
     private float lastHitTime = -999f;
     private float maxBarWidth = 100f;
     private float lossFillAmount;
+    private float previousLossFillAmount;
 
-    public void Initialize(Transform targetTransform, int maxHp, bool isBoss)
+    // ------------------ NEW: Auto-assign fields ------------------
+    /// <summary>
+    /// Try to auto-assign missing UI references by scanning children.
+    /// Best results if child names include keywords: "fill", "loss", "bg", "hptext".
+    /// Call this from Initialize() or right after Instantiating the prefab.
+    /// </summary>
+    public void AutoAssignFields()
     {
-        target = targetTransform;
-        maxHealth = Mathf.Max(1, maxHp);
-        currentHealth = maxHealth;
+        // If everything already assigned, skip
+        if (worldCanvas != null && fillImage != null && lossImage != null && backgroundImage != null && healthText != null)
+            return;
 
-        // determine if this healthbar is child of enemy
-        isChildOfTarget = (target != null && transform.parent == target);
+        // Cache children components
+        Image[] images = GetComponentsInChildren<Image>(includeInactive: true);
+        TextMeshProUGUI[] tmps = GetComponentsInChildren<TextMeshProUGUI>(includeInactive: true);
+        UnityEngine.UI.Text[] uis = GetComponentsInChildren<UnityEngine.UI.Text>(includeInactive: true);
+        Canvas foundCanvas = GetComponentInChildren<Canvas>(includeInactive: true);
 
-        // set fill color (boss vs normal)
-        if (fillImage != null)
+        // Assign canvas if missing
+        if (worldCanvas == null && foundCanvas != null) worldCanvas = foundCanvas;
+
+        // Helper local functions for finding by name
+        System.Func<string, Image> FindImageByName = (key) =>
         {
-            fillImage.color = isBoss ? new Color(0.5f, 0f, 0.5f) : Color.red;
+            foreach (var img in images)
+            {
+                if (img == null) continue;
+                if (img.gameObject.name.ToLower().Contains(key.ToLower())) return img;
+            }
+            return null;
+        };
+
+        System.Func<string, TextMeshProUGUI> FindTMPByName = (key) =>
+        {
+            foreach (var t in tmps)
+            {
+                if (t == null) continue;
+                if (t.gameObject.name.ToLower().Contains(key.ToLower())) return t;
+            }
+            return null;
+        };
+
+        // 1) Try by conventional names
+        if (fillImage == null)
+        {
+            // prefer "fill" or "hp" in name, and prefer Image.Type.Filled
+            Image candidate = FindImageByName("fill") ?? FindImageByName("hp") ?? FindImageByName("bar");
+            if (candidate == null)
+            {
+                // fallback: pick first filled image
+                foreach (var img in images) if (img != null && img.type == Image.Type.Filled) { candidate = img; break; }
+            }
+            if (candidate == null && images.Length > 0) candidate = images[0];
+            fillImage = candidate;
         }
 
-        // compute default max width from background if available
+        if (lossImage == null)
+        {
+            Image candidate = FindImageByName("loss") ?? FindImageByName("white") ?? FindImageByName("flash");
+            // prefer a different image than fillImage and prefer Filled
+            if (candidate == null)
+            {
+                foreach (var img in images)
+                {
+                    if (img == null) continue;
+                    if (img == fillImage) continue;
+                    if (img.type == Image.Type.Filled) { candidate = img; break; }
+                }
+            }
+            if (candidate == null)
+            {
+                foreach (var img in images) if (img != null && img != fillImage) { candidate = img; break; }
+            }
+            lossImage = candidate;
+        }
+
+        if (backgroundImage == null)
+        {
+            Image candidate = FindImageByName("bg") ?? FindImageByName("back") ?? FindImageByName("background");
+            if (candidate == null)
+            {
+                // pick first image that is not fillImage and not lossImage
+                foreach (var img in images) if (img != null && img != fillImage && img != lossImage) { candidate = img; break; }
+            }
+            backgroundImage = candidate;
+        }
+
+        if (healthText == null)
+        {
+            // try TMP by name
+            TextMeshProUGUI tCandidate = FindTMPByName("hp") ?? FindTMPByName("health") ?? FindTMPByName("text");
+            if (tCandidate == null && tmps.Length > 0) tCandidate = tmps[0];
+            if (tCandidate != null) healthText = tCandidate;
+            else if (uis.Length > 0)
+            {
+                // fallback: if only UnityEngine.UI.Text exists, create a simple TMP wrapper if possible
+                // but by default assign null and user can use UpdateHealth via other means
+            }
+        }
+
+        // Final sanity: if fillImage exists but not set to Filled and there is a filled alternative, prefer filled
+        if (fillImage != null && fillImage.type != Image.Type.Filled)
+        {
+            foreach (var img in images)
+            {
+                if (img == null) continue;
+                if (img.type == Image.Type.Filled && img != lossImage)
+                {
+                    fillImage = img;
+                    break;
+                }
+            }
+        }
+
+        // Set reasonable defaults if still null (avoid null refs)
+        // backgroundImage optional, fillImage ideally present
+        if (backgroundImage == null && images.Length > 0) backgroundImage = images[0];
+        if (fillImage == null && images.Length > 0) fillImage = images[0];
+        // lossImage optional — ok if null
+        // healthText optional — ok if null
+
+        // Compute maxBarWidth if backgroundImage found
         if (backgroundImage != null)
         {
             var bgRT = backgroundImage.GetComponent<RectTransform>();
             if (bgRT != null && bgRT.rect.width > 0f) maxBarWidth = bgRT.rect.width;
         }
+    }
+    // ------------------ END auto-assign ------------------
 
-        // initial background color
-        if (backgroundImage != null) backgroundImage.color = activeBackgroundColor;
+    public void Initialize(Transform targetTransform, int maxHp, bool isBoss)
+    {
+        // First attempt auto- assign so Initialize can work even if prefab missing refs
+        AutoAssignFields();
+
+        target = targetTransform;
+        maxHealth = Mathf.Max(1, maxHp);
+        currentHealth = maxHealth;
+
+        isChildOfTarget = (target != null && transform.parent == target);
+
+        if (fillImage != null)
+        {
+            fillImage.color = isBoss ? new Color(0.5f, 0f, 0.5f) : Color.red;
+        }
+
+        if (backgroundImage != null)
+        {
+            var bgRT = backgroundImage.GetComponent<RectTransform>();
+            if (bgRT != null && bgRT.rect.width > 0f) maxBarWidth = bgRT.rect.width;
+            backgroundImage.color = activeBackgroundColor;
+        }
 
         UpdateUI();
 
-        // initial visibility
         if (showOnlyOnDamage)
         {
-            // start hidden
             gameObject.SetActive(false);
-            // set inactive appearance (background white) so when visible later you can toggle
             if (backgroundImage != null) backgroundImage.color = inactiveBackgroundColor;
         }
         else
@@ -82,24 +212,20 @@ public class HealthBarUI : MonoBehaviour
 
     void LateUpdate()
     {
-        // auto-hide timer
         if (showOnlyOnDamage && gameObject.activeSelf && Time.time > lastHitTime + visibleDuration)
         {
-            // hide and set inactive background color (so when shown again it will show white bg if you want)
             gameObject.SetActive(false);
             if (backgroundImage != null) backgroundImage.color = inactiveBackgroundColor;
             return;
         }
 
-        // Hiệu ứng mất máu từ từ
         if (lossImage != null && lossImage.type == Image.Type.Filled)
         {
-            // Giảm dần fillAmount của thanh loss Image về giá trị máu hiện tại (lossFillAmount)
             if (lossImage.fillAmount > lossFillAmount)
             {
-                lossImage.fillAmount = Mathf.Max(lossFillAmount, lossImage.fillAmount - Time.deltaTime * lossSpeed);
+                float dec = Time.deltaTime * lossSpeed;
+                lossImage.fillAmount = Mathf.Max(lossFillAmount, lossImage.fillAmount - dec);
             }
-            // Đảm bảo không bị lỗi float
             else if (lossImage.fillAmount < lossFillAmount)
             {
                 lossImage.fillAmount = lossFillAmount;
@@ -123,22 +249,19 @@ public class HealthBarUI : MonoBehaviour
         if (faceCamera && Camera.main != null) transform.rotation = Camera.main.transform.rotation;
     }
 
-    /// <summary>
-    /// Gọi khi enemy bị damage (EnemyCore sẽ gọi).
-    /// Điều này đảm bảo healthbar hiển và reset timer.
-    /// </summary>
     public void OnDamagedShow(int newHp)
     {
+        if (lossImage != null && lossImage.type == Image.Type.Filled) previousLossFillAmount = lossImage.fillAmount;
+        else previousLossFillAmount = 1.0f;
+
         currentHealth = Mathf.Clamp(newHp, 0, maxHealth);
 
-        // show bar when damaged
         if (showOnlyOnDamage)
         {
             gameObject.SetActive(true);
             if (backgroundImage != null) backgroundImage.color = activeBackgroundColor;
         }
 
-        // set last hit time for auto-hide
         lastHitTime = Time.time;
 
         UpdateUI();
@@ -153,41 +276,51 @@ public class HealthBarUI : MonoBehaviour
     void UpdateUI()
     {
         float ratio = (float)currentHealth / Mathf.Max(1, maxHealth);
+        bool isAlive = currentHealth > 0;
+        float desiredFill = (!freezeFillUntilDead || !isAlive) ? Mathf.Clamp01(ratio) : 1f;
 
-        // 1. Cập nhật thanh Fill (màu đỏ) ngay lập tức
+        lossFillAmount = ratio;
+        if (lossImage != null && lossImage.type == Image.Type.Filled)
+        {
+            if (ratio < previousLossFillAmount)
+            {
+                lossImage.fillAmount = previousLossFillAmount;
+            }
+            else
+            {
+                lossImage.fillAmount = ratio;
+            }
+
+            if (freezeFillUntilDead && isAlive)
+            {
+                lossImage.fillAmount = 1f;
+            }
+        }
+
         if (fillImage != null)
         {
             if (fillImage.type == Image.Type.Filled)
             {
-                fillImage.fillAmount = Mathf.Clamp01(ratio);
+                fillImage.fillAmount = desiredFill;
             }
             else
             {
                 var rt = fillImage.GetComponent<RectTransform>();
-                if (rt != null) rt.sizeDelta = new Vector2(maxBarWidth * ratio, rt.sizeDelta.y);
+                if (rt != null) rt.sizeDelta = new Vector2(maxBarWidth * desiredFill, rt.sizeDelta.y);
             }
         }
 
-        // 2. Thiết lập mục tiêu cho thanh Loss (màu trắng)
-        lossFillAmount = ratio;
-        if (lossImage != null)
+        if (healthText != null)
         {
-            // Ngay khi nhận damage, đặt thanh Loss bằng máu cũ (máu tối đa nếu chưa bị mất)
-            // và để LateUpdate() giảm dần về fillImage.fillAmount
-            if (lossImage.type == Image.Type.Filled)
+            if (freezeFillUntilDead && isAlive && !showHealthTextEvenWhenFrozen)
             {
-                // Nếu đây là lần đầu hoặc máu chưa mất (lossFillAmount = 1)
-                if (lossImage.fillAmount < ratio) lossImage.fillAmount = ratio;
+                healthText.text = $"{maxHealth}/{maxHealth}";
             }
             else
             {
-                // Logic cho Rect width (ít dùng hơn)
-                var rt = lossImage.GetComponent<RectTransform>();
-                if (rt != null) rt.sizeDelta = new Vector2(maxBarWidth * lossFillAmount, rt.sizeDelta.y);
+                healthText.text = $"{currentHealth}/{maxHealth}";
             }
         }
-
-        if (healthText != null) healthText.text = $"{currentHealth}/{maxHealth}";
     }
 
     public void SetMaxWidth(float pixelWidth)
