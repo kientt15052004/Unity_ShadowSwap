@@ -8,6 +8,7 @@ public class Hero_Knight : EnemyCore
     // Tăng máu và sát thương (Cần thiết lập lại trong Inspector)
     public int bossMaxHealth = 150;
     public int bossDamage = 15;
+    public override bool IsBossType => true;
 
     [Header("Boss Behavior")]
     public float patrolRadius = 10f; // Phạm vi hoạt động tối đa
@@ -23,9 +24,29 @@ public class Hero_Knight : EnemyCore
     protected override void Awake()
     {
         base.Awake();
+
         // Áp dụng chỉ số Boss
         maxHealth = bossMaxHealth;
-        attackData.damage = bossDamage;
+
+        // AN TOÀN: kiểm tra attackData null trước khi truy xuất
+        if (attackData == null)
+        {
+            Debug.LogWarning($"[{name}] attackData is not assigned in Inspector. Creating temporary AttackData instance to avoid NRE.");
+            // Tạo instance runtime (không persistent asset). Dùng để test; tốt nhất vẫn assign asset trong Inspector.
+            attackData = ScriptableObject.CreateInstance<AttackData>();
+            attackData.damage = bossDamage;
+            // set some sane defaults for other fields to avoid further null refs
+            attackData.range = Mathf.Max(0.6f, attackRange);
+            attackData.cooldown = Mathf.Max(0.2f, attackCooldown);
+            attackData.hitLayers = attackData.hitLayers == 0 ? ~0 : attackData.hitLayers;
+        }
+        else
+        {
+            // Nếu đã gán asset, chỉ cập nhật damage theo bossDamage
+            attackData.damage = bossDamage;
+        }
+
+        // đảm bảo currentHealth được set an toàn
         currentHealth = maxHealth;
 
         initialPosition = transform.position;
@@ -36,6 +57,8 @@ public class Hero_Knight : EnemyCore
         base.Start();
         // Thay đổi phạm vi Patrol để giới hạn phạm vi hoạt động (Arena)
         patrolDistance = patrolRadius;
+        maxHealth = bossMaxHealth; // boss có máu cao hơn
+        currentHealth = maxHealth;
     }
 
 
@@ -127,11 +150,12 @@ public class Hero_Knight : EnemyCore
         rb.velocity = Vector2.zero;
 
         // Phát animation chặn
-        anim.SetTrigger("Block");
+        anim.SetBool("Block",true);
 
         yield return new WaitForSeconds(blockDuration);
 
         isBlocking = false;
+        anim.SetBool("Block",false);
         // Bắt đầu lại Coroutine Hurt thông thường sau khi chặn xong nếu vẫn bị thương.
         // Tuy nhiên, vì logic TakeDamage đã xử lý sát thương giảm, ta chỉ cần thoát
     }

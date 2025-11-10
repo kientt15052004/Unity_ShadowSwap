@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 4703927278422132657}
   - component: {fileID: 6121458369347232528}
   - component: {fileID: 4533688207787171206}
+  - component: {fileID: -1238802263649407189}
   m_Layer: 0
   m_Name: Golem1
   m_TagString: Enemy
@@ -309,3 +310,21 @@ MonoBehaviour:
   rightPoint: {x: 0, y: 0}
   targetPoint: {x: 0, y: 0}
   isFacingRight: 1
+--- !u!114 &-1238802263649407189
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3011358936186911818}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31b35bfdf009c124c9b20c2ec8c3d436, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  barHeightOffset: 1.2
+  baseBarLength: 1
+  barHeight: 0.15
+  regularEnemyColor: {r: 1, g: 0, b: 0, a: 1}
+  bossColor: {r: 0.5, g: 0, b: 0.5, a: 1}
+  isBoss: 0
