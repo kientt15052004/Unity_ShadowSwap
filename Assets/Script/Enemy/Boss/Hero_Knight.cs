@@ -1,73 +1,116 @@
 ﻿using UnityEngine;
-using System.Collections; // Cần thiết cho Coroutine
+using System.Collections;
 
-// BossSentinel kế thừa từ EnemyCore (thay vì GolemBase, giả định GolemBase là lớp rỗng)
 public class Hero_Knight : EnemyCore
 {
     [Header("Boss Stats")]
-    // Tăng máu và sát thương (Cần thiết lập lại trong Inspector)
     public int bossMaxHealth = 150;
     public int bossDamage = 15;
     public override bool IsBossType => true;
 
     [Header("Boss Behavior")]
-    public float patrolRadius = 10f; // Phạm vi hoạt động tối đa
-    public float dodgeDistance = 2f; // Khoảng cách lùi lại khi né
+    public float patrolRadius = 10f;
+    public float dodgeDistance = 2f;
     public float dodgeDuration = 0.2f;
     public float blockDuration = 1.0f;
-    public float blockChance = 0.3f; // Tỉ lệ Boss sẽ chặn thay vì lùi lại
+    [Range(0f, 1f)] public float blockChance = 0.3f;
     public float actionCooldown = 0.5f;
     private float lastActionTime = -999f;
 
+    [Header("Attack Fallback")]
+    [Tooltip("Nếu Animator không có event OnAttackHit, sử dụng fallback coroutine với delay này (số giây từ bắt đầu animation đến hit frame).")]
+    public float attackHitDelay = 0.22f;
+    [Tooltip("Nếu Animator không có event EndAttack, kết thúc attack sau attackDuration (giây).")]
+    public float attackDuration = 0.6f;
+    [Tooltip("Nếu true, sẽ tự động fallback khi không thấy animation event (debug).")]
+    public bool allowAttackFallback = true;
+    public Animator animator;
     private Vector2 initialPosition;
+
+    // cache for whether animator events are expected (manually set to true if you added events)
+    [Header("Animator event flags")]
+    [Tooltip("Bật true nếu animation attack của bạn có event gọi OnAttackHit() và EndAttack() chính xác.")]
+    public bool animatorHasAttackEvents = false;
 
     protected override void Awake()
     {
-        base.Awake();
+        base.Awake(); // đảm bảo EnemyCore khởi tạo anim, rb, healthComp, v.v.
 
-        // Áp dụng chỉ số Boss
-        maxHealth = bossMaxHealth;
+        // --- Ensure animator assigned ---
+        if (anim == null)
+        {
+            anim = GetComponent<Animator>();
+            if (anim == null)
+            {
+                // try children
+                anim = GetComponentInChildren<Animator>(true);
+            }
+            if (anim == null)
+            {
+                Debug.LogWarning($"[{name}] Animator not found on GameObject or children. Please add an Animator or assign it in Inspector.");
+            }
+            else
+            {
+                Debug.Log($"[{name}] Auto-assigned Animator: {anim.gameObject.name}");
+            }
+        }
 
-        // AN TOÀN: kiểm tra attackData null trước khi truy xuất
+        // --- Ensure attackHitbox assigned ---
+        if (attackHitbox == null)
+        {
+            attackHitbox = GetComponentInChildren<AttackHitbox>(true);
+            if (attackHitbox != null) Debug.Log($"[{name}] Auto-assigned AttackHitbox from children.");
+        }
+
+        // --- Ensure attackData assigned ---
         if (attackData == null)
         {
-            Debug.LogWarning($"[{name}] attackData is not assigned in Inspector. Creating temporary AttackData instance to avoid NRE.");
-            // Tạo instance runtime (không persistent asset). Dùng để test; tốt nhất vẫn assign asset trong Inspector.
+            // create lightweight runtime AttackData as fallback (still recommend assigning asset in Inspector)
             attackData = ScriptableObject.CreateInstance<AttackData>();
             attackData.damage = bossDamage;
-            // set some sane defaults for other fields to avoid further null refs
             attackData.range = Mathf.Max(0.6f, attackRange);
             attackData.cooldown = Mathf.Max(0.2f, attackCooldown);
             attackData.hitLayers = attackData.hitLayers == 0 ? ~0 : attackData.hitLayers;
+            Debug.LogWarning($"[{name}] attackData missing -> runtime AttackData created as fallback. Assign real asset in Inspector.");
         }
-        else
-        {
-            // Nếu đã gán asset, chỉ cập nhật damage theo bossDamage
-            attackData.damage = bossDamage;
-        }
-
-        // đảm bảo currentHealth được set an toàn
-        currentHealth = maxHealth;
-
-        initialPosition = transform.position;
     }
 
     protected override void Start()
     {
         base.Start();
-        // Thay đổi phạm vi Patrol để giới hạn phạm vi hoạt động (Arena)
+        initialPosition = transform.position;
         patrolDistance = patrolRadius;
-        maxHealth = bossMaxHealth; // boss có máu cao hơn
+        maxHealth = bossMaxHealth;
         currentHealth = maxHealth;
+
+        Debug.Log($"[{name}] started. attackData.damage={attackData?.damage ?? -1}, attackHitbox={(attackHitbox != null)}");
     }
 
-
-    protected void Update()
+    // SAFE Update override (uses EnemyCore helpers)
+    protected override void Update()
     {
-        // --- 1. Kiểm tra An Toàn và Trạng Thái ---
-        if (IsDead || IsHurt || IsBlocking)
+        // guard: ensure anim exists before calling SetBool directly
+        if (anim == null && rb == null)
         {
-            // Nếu chết, bị thương hoặc đang đỡ đòn, không thực hiện AI
+            // try minimal recovery: get components
+            rb = GetComponent<Rigidbody2D>();
+            anim = GetComponent<Animator>();
+        }
+
+        // protect against animator null when calling animation methods
+        // use the protected helper SetAnimatorBoolSafe if available in EnemyCore (preferred)
+        // but also guard direct anim calls
+        if (IsDead)
+        {
+            base.Update();
+            return;
+        }
+
+        if (rb == null) rb = GetComponent<Rigidbody2D>();
+        if (anim == null) anim = GetComponent<Animator>(); // last attempt
+
+        if (IsHurt || IsBlocking)
+        {
             UpdateAnimationFlags();
             return;
         }
@@ -75,29 +118,30 @@ public class Hero_Knight : EnemyCore
         if (player == null)
         {
             FindPlayer();
-            if (player == null) return;
+            if (player == null)
+            {
+                UpdateAnimationFlags();
+                return;
+            }
         }
 
-        // --- 2. Logic AI Chính ---
         float distanceToPlayer = Vector2.Distance(transform.position, player.position);
-
-        // A. QUAY MẶT VÀO PLAYER (Boss luôn nhìn Player)
         FaceTarget(player.position);
 
-        // B. HÀNH VI TẤN CÔNG / CHASE
         if (distanceToPlayer <= chaseDistance)
         {
-            // B1. Trong tầm tấn công
             if (distanceToPlayer <= attackRange)
             {
-                // Ngừng di chuyển khi ở đủ gần để tấn công
-                rb.velocity = new Vector2(0f, rb.velocity.y);
+                if (rb != null) rb.velocity = new Vector2(0f, rb.velocity.y);
                 TryAttack();
+                // fallback start if no animation events (allowAttackFallback controls this)
+                if (allowAttackFallback && !animatorHasAttackEvents && isAttacking && !IsInvoking(nameof(StartAttackFallback)))
+                {
+                    Invoke(nameof(StartAttackFallback), 0f);
+                }
             }
-            // B2. Đuổi theo / Giữ khoảng cách
             else
             {
-                // Nếu không đang tấn công, đuổi theo
                 if (!IsAttacking)
                 {
                     SimpleChase();
@@ -106,36 +150,109 @@ public class Hero_Knight : EnemyCore
         }
         else
         {
-            // C. HÀNH VI ĐỨNG YÊN (KHÔNG TUẦN TRA)
-            // Nếu Player quá xa, Boss đứng yên và reset vị trí gần tâm Arena (nếu cần)
-            rb.velocity = new Vector2(0f, rb.velocity.y);
-            // Giữ trạng thái Run = false khi đứng yên
-            anim.SetBool("Run", false);
+            if (rb != null) rb.velocity = new Vector2(0f, rb.velocity.y);
+            // safe set animator flag
+            try
+            {
+                // Prefer protected helper if available
+                animator.SetBool("Run", false);
+            }
+            catch
+            {
+                if (anim != null) anim.SetBool("Run", false);
+            }
         }
 
-        // --- 3. Cập nhật Animation ---
         UpdateAnimationFlags();
+        base.Update();
     }
 
-    // HÀM XỬ LÝ NÉ ĐÒN VÀ ĐỠ ĐÒN (Được gọi khi bị tấn công)
+    // If animator events missing, fallback will call this to time the hit and end attack
+    private void StartAttackFallback()
+    {
+        // only start fallback when isAttacking true and an attack isn't already scheduled
+        if (!isAttacking) return;
+        StartCoroutine(AttackFallbackCoroutine());
+    }
+
+    private IEnumerator AttackFallbackCoroutine()
+    {
+        // wait until hit frame
+        yield return new WaitForSeconds(attackHitDelay);
+
+        // call same method animation event would call
+        OnAttackHit(); // this will use attackHitbox or fallback damage
+
+        // wait rest of animation then end attack
+        yield return new WaitForSeconds(Mathf.Max(0f, attackDuration - attackHitDelay));
+
+        EndAttack();
+    }
+
+    // Override OnAttackHit to ensure hitbox is used and fallback damage applied if needed
+    public override void OnAttackHit()
+    {
+        // 1) If attackHitbox present and attackData present -> use it (this covers normal case)
+        if (attackHitbox != null && attackData != null)
+        {
+            attackHitbox.DoAttack(attackData, transform, isFacingRight);
+        }
+        else
+        {
+            Debug.LogWarning($"[{name}] OnAttackHit: attackHitbox or attackData missing. Applying fallback direct damage to player if possible.");
+            // fallback: direct damage to player if available
+            if (player != null)
+            {
+                var playerGO = player.gameObject;
+                // prefer IDamageable
+                var id = playerGO.GetComponent<IDamageable>();
+                if (id != null)
+                {
+                    id.TakeDamage(new DamageInfo(attackData != null ? attackData.damage : bossDamage, transform.position, gameObject, false));
+                }
+                else
+                {
+                    var hm = playerGO.GetComponent<HealthManager>();
+                    if (hm != null)
+                        hm.TakeDamage(attackData != null ? attackData.damage : bossDamage);
+                    else
+                        Debug.LogWarning($"[{name}] Fallback: player has no IDamageable nor HealthManager -> cannot apply damage.");
+                }
+            }
+        }
+    }
+
+    // When boss dies, ensure attack fallback coroutines are stopped and healthbar updated
+    protected override void OnDieLocal()
+    {
+        // stop fallback coroutine if running
+        StopAllCoroutines();
+
+        // ensure the healthbar and UI get updated to zero if needed
+        if (healthBarInstance != null)
+        {
+            healthBarInstance.UpdateHealth(0);
+        }
+
+        base.OnDieLocal();
+    }
+
+    // override damage handler to maybe perform block/dodge
     protected override void OnTakeDamageLocal(DamageInfo info)
     {
         if (IsDead) return;
 
-        // --- LOGIC DI CHUYỂN LINH HOẠT VÀ ĐỠ ĐÒN ---
         if (Time.time < lastActionTime + actionCooldown)
         {
-            // Nếu đang trong cooldown, chỉ chịu sát thương bình thường
             base.OnTakeDamageLocal(info);
             return;
         }
 
-        // Tỉ lệ chặn
         if (Random.value < blockChance)
         {
             StartCoroutine(BlockRoutine());
         }
-        else // Tỉ lệ né
+        else
         {
             StartCoroutine(DodgeRoutine(info.origin));
         }
@@ -143,80 +260,30 @@ public class Hero_Knight : EnemyCore
         lastActionTime = Time.time;
     }
 
-    // Coroutine Đỡ Đòn
     private IEnumerator BlockRoutine()
     {
         isBlocking = true;
         rb.velocity = Vector2.zero;
-
-        // Phát animation chặn
-        anim.SetBool("Block",true);
-
+        animator.SetBool("Block", true);
         yield return new WaitForSeconds(blockDuration);
-
         isBlocking = false;
-        anim.SetBool("Block",false);
-        // Bắt đầu lại Coroutine Hurt thông thường sau khi chặn xong nếu vẫn bị thương.
-        // Tuy nhiên, vì logic TakeDamage đã xử lý sát thương giảm, ta chỉ cần thoát
+        animator.SetBool("Block", false);
     }
 
-    // Coroutine Né Đòn
     private IEnumerator DodgeRoutine(Vector2 attackOrigin)
     {
-        isHurt = true; // Sử dụng cờ Hurt để ngăn AI di chuyển
-
-        // Xác định hướng lùi lại (ngược lại với hướng tấn công)
+        isHurt = true;
         float directionToDodge = Mathf.Sign(transform.position.x - attackOrigin.x);
-
-        // Lùi lại
         rb.velocity = new Vector2(directionToDodge * (chaseSpeed * 1.5f), rb.velocity.y);
-
-        // Phát animation né (ví dụ: Hurt)
-        anim.SetTrigger("Dodge");
-
+        // use trigger safely
+        if (anim != null) anim.SetTrigger("Dodge");
         yield return new WaitForSeconds(dodgeDuration);
-
-        // Đảm bảo Boss không bị đẩy ra khỏi khu vực Arena
         Vector2 clampedPos = new Vector2(
             Mathf.Clamp(transform.position.x, initialPosition.x - patrolRadius, initialPosition.x + patrolRadius),
             transform.position.y
         );
         transform.position = clampedPos;
-
         rb.velocity = new Vector2(0f, rb.velocity.y);
         isHurt = false;
-    }
-
-    // --- LOGIC CỔNG (Gate Blocking) ---
-
-    // HÀM MỚI: Dùng để ngăn Player di chuyển đến cổng
-    // Cần gọi hàm này từ một script quản lý cổng hoặc đặt cổng
-    // (Giả sử bạn có một script GateManager)
-    public void PreventPlayerMovement(GameObject gate)
-    {
-        // Tìm PlayerMove script
-        if (player != null && player.TryGetComponent<PlayerMove>(out PlayerMove pm))
-        {
-            // Nếu PlayerMove có hàm để vô hiệu hóa di chuyển
-            // pm.DisableMovement(); 
-            // Hoặc đơn giản là giảm tốc độ Player về 0 khi ở gần cổng
-        }
-
-        // Tùy chọn: Có thể spawn một bức tường vô hình (Invisible Wall) tại vị trí cổng
-        // Collider2D gateCollider = gate.GetComponent<Collider2D>();
-        // if (gateCollider != null) gateCollider.enabled = true;
-    }
-
-    // --- Override cho OnDied ---
-    protected override void OnDieLocal()
-    {
-        // Khi Boss chết, khôi phục tốc độ Player (nếu có)
-        if (player != null && player.gameObject.TryGetComponent<PlayerMove>(out PlayerMove pm))
-        {
-            pm.SetupMove(5f, 8f);
-        }
-
-        // Thực hiện logic chết của EnemyCore
-        base.OnDieLocal();
     }
 }

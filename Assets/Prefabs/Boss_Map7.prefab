@@ -16,7 +16,6 @@ GameObject:
   - component: {fileID: 2709643677679375537}
   - component: {fileID: 2709643677679375547}
   - component: {fileID: 2709643677679375546}
-  - component: {fileID: 2709643677679375545}
   m_Layer: 0
   m_Name: Boss_Map7
   m_TagString: Untagged
@@ -284,27 +283,3 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!114 &2709643677679375545
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2709643677679375538}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0c7020d55226c8e46bba4ba24180961a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  worldCanvas: {fileID: 0}
-  fillImage: {fileID: 0}
-  backgroundImage: {fileID: 0}
-  healthText: {fileID: 0}
-  lossImage: {fileID: 0}
-  lossSpeed: 0.5
-  localOffset: {x: 0, y: 1.2, z: 0}
-  faceCamera: 1
-  showOnlyOnDamage: 1
-  visibleDuration: 3
-  inactiveBackgroundColor: {r: 1, g: 1, b: 1, a: 1}
-  activeBackgroundColor: {r: 0, g: 0, b: 0, a: 0.6}

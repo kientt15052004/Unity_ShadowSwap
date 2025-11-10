@@ -205,7 +205,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
     public virtual bool IsBossType => false;
 
     // internal UI instance
-    private HealthBarUI healthBarInstance;
+    public HealthBarUI healthBarInstance;
 
     // small cooldown guard
     public float directionChangeCooldown = 0.4f;
