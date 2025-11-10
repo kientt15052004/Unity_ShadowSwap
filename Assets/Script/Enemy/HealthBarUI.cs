@@ -59,7 +59,6 @@ public class HealthBarUI : MonoBehaviour
         // Assign canvas if missing
         if (worldCanvas == null && foundCanvas != null) worldCanvas = foundCanvas;
 
-        // Helper local functions for finding by name
         System.Func<string, Image> FindImageByName = (key) =>
         {
             foreach (var img in images)
@@ -80,24 +79,22 @@ public class HealthBarUI : MonoBehaviour
             return null;
         };
 
-        // 1) Try by conventional names
+        // Find fillImage
         if (fillImage == null)
         {
-            // prefer "fill" or "hp" in name, and prefer Image.Type.Filled
-            Image candidate = FindImageByName("fill") ?? FindImageByName("hp") ?? FindImageByName("bar");
+            Image candidate = FindImageByName("UISprite") ?? FindImageByName("fill") ?? FindImageByName("hp") ?? FindImageByName("bar");
             if (candidate == null)
             {
-                // fallback: pick first filled image
                 foreach (var img in images) if (img != null && img.type == Image.Type.Filled) { candidate = img; break; }
             }
             if (candidate == null && images.Length > 0) candidate = images[0];
             fillImage = candidate;
         }
 
+        // Find lossImage (prefer different from fill)
         if (lossImage == null)
         {
-            Image candidate = FindImageByName("loss") ?? FindImageByName("white") ?? FindImageByName("flash");
-            // prefer a different image than fillImage and prefer Filled
+            Image candidate = FindImageByName("UISprite") ?? FindImageByName("loss") ?? FindImageByName("white") ?? FindImageByName("flash");
             if (candidate == null)
             {
                 foreach (var img in images)
@@ -114,50 +111,64 @@ public class HealthBarUI : MonoBehaviour
             lossImage = candidate;
         }
 
+        // backgroundImage
         if (backgroundImage == null)
         {
             Image candidate = FindImageByName("bg") ?? FindImageByName("back") ?? FindImageByName("background");
             if (candidate == null)
             {
-                // pick first image that is not fillImage and not lossImage
                 foreach (var img in images) if (img != null && img != fillImage && img != lossImage) { candidate = img; break; }
             }
             backgroundImage = candidate;
         }
 
+        // healthText
         if (healthText == null)
         {
-            // try TMP by name
             TextMeshProUGUI tCandidate = FindTMPByName("hp") ?? FindTMPByName("health") ?? FindTMPByName("text");
             if (tCandidate == null && tmps.Length > 0) tCandidate = tmps[0];
             if (tCandidate != null) healthText = tCandidate;
-            else if (uis.Length > 0)
-            {
-                // fallback: if only UnityEngine.UI.Text exists, create a simple TMP wrapper if possible
-                // but by default assign null and user can use UpdateHealth via other means
-            }
         }
 
-        // Final sanity: if fillImage exists but not set to Filled and there is a filled alternative, prefer filled
-        if (fillImage != null && fillImage.type != Image.Type.Filled)
+        // If both images are filled-type, sync their fill method and origin so they animate together
+        if (fillImage != null && lossImage != null)
         {
-            foreach (var img in images)
+            // prefer fillImage to be the one configured; if it's not Filled, try pick a Filled one
+            if (fillImage.type != Image.Type.Filled)
             {
-                if (img == null) continue;
-                if (img.type == Image.Type.Filled && img != lossImage)
+                foreach (var img in images) if (img != null && img.type == Image.Type.Filled && img != lossImage) { fillImage = img; break; }
+            }
+
+            // If lossImage not Filled but fillImage is, prefer making lossImage Filled (so fillAmount works)
+            if (fillImage != null && fillImage.type == Image.Type.Filled)
+            {
+                // ensure lossImage uses same fill settings
+                if (lossImage != null)
                 {
-                    fillImage = img;
-                    break;
+                    lossImage.type = Image.Type.Filled;
+                    lossImage.fillMethod = fillImage.fillMethod;
+                    lossImage.fillOrigin = fillImage.fillOrigin;
+                    lossImage.fillClockwise = fillImage.fillClockwise;
                 }
             }
+
+            // Ensure sibling order: lossImage must be rendered ON TOP of fillImage
+            if (fillImage != null && lossImage != null && fillImage.transform.parent == lossImage.transform.parent)
+            {
+                int fi = fillImage.transform.GetSiblingIndex();
+                int desired = Mathf.Max(0, fi + 1);
+                lossImage.transform.SetSiblingIndex(desired);
+            }
+            else if (lossImage != null)
+            {
+                // put lossImage as last sibling in its parent so it renders top-most in that canvas group
+                lossImage.transform.SetAsLastSibling();
+            }
         }
 
-        // Set reasonable defaults if still null (avoid null refs)
-        // backgroundImage optional, fillImage ideally present
+        // Set reasonable defaults if still null
         if (backgroundImage == null && images.Length > 0) backgroundImage = images[0];
         if (fillImage == null && images.Length > 0) fillImage = images[0];
-        // lossImage optional — ok if null
-        // healthText optional — ok if null
 
         // Compute maxBarWidth if backgroundImage found
         if (backgroundImage != null)
@@ -165,12 +176,20 @@ public class HealthBarUI : MonoBehaviour
             var bgRT = backgroundImage.GetComponent<RectTransform>();
             if (bgRT != null && bgRT.rect.width > 0f) maxBarWidth = bgRT.rect.width;
         }
+
+        // Canvas safety: ensure world canvas is world-space and has sorting enabled
+        if (worldCanvas != null)
+        {
+            if (worldCanvas.renderMode != RenderMode.WorldSpace) worldCanvas.renderMode = RenderMode.WorldSpace;
+            worldCanvas.overrideSorting = true;
+            worldCanvas.sortingOrder = 1000; // high so it's visible above most UI
+            if (Camera.main != null) worldCanvas.worldCamera = Camera.main;
+        }
     }
     // ------------------ END auto-assign ------------------
 
     public void Initialize(Transform targetTransform, int maxHp, bool isBoss)
     {
-        // First attempt auto- assign so Initialize can work even if prefab missing refs
         AutoAssignFields();
 
         target = targetTransform;
@@ -182,6 +201,17 @@ public class HealthBarUI : MonoBehaviour
         if (fillImage != null)
         {
             fillImage.color = isBoss ? new Color(0.5f, 0f, 0.5f) : Color.red;
+            if (fillImage.type == Image.Type.Filled) fillImage.fillAmount = 1f;
+        }
+
+        if (lossImage != null)
+        {
+            // ensure lossImage visible and above
+            lossImage.gameObject.SetActive(true);
+            // if lossImage is filled type, set to full initially
+            if (lossImage.type == Image.Type.Filled) lossImage.fillAmount = 1f;
+            // make sure alpha not zero
+            var c = lossImage.color; if (c.a <= 0f) c.a = 1f; lossImage.color = c;
         }
 
         if (backgroundImage != null)
@@ -280,33 +310,53 @@ public class HealthBarUI : MonoBehaviour
         float desiredFill = (!freezeFillUntilDead || !isAlive) ? Mathf.Clamp01(ratio) : 1f;
 
         lossFillAmount = ratio;
+
+        // IMPORTANT: don't force lossImage.fillAmount to 1 if you want loss effect to show previous value.
+        // We only set lossImage.fillAmount = previousLossFillAmount on damage (OnDamagedShow saved it).
         if (lossImage != null && lossImage.type == Image.Type.Filled)
         {
+            // If this is initialization (previousLossFillAmount is 0) ensure lossImage at least matches desiredFill
+            if (previousLossFillAmount <= 0f)
+                previousLossFillAmount = Mathf.Clamp01(desiredFill);
+
+            // If health decreased: keep lossImage at previous value so LateUpdate can lerp it down
             if (ratio < previousLossFillAmount)
             {
                 lossImage.fillAmount = previousLossFillAmount;
             }
             else
             {
+                // health increased or equal: sync loss image immediately
                 lossImage.fillAmount = ratio;
             }
 
-            if (freezeFillUntilDead && isAlive)
-            {
-                lossImage.fillAmount = 1f;
-            }
+            // DO NOT override with 1f here; freeze behavior should only affect visible fill (fillImage)
+            // If user wants freeze until dead, we keep loss image as previous value so it won't "reveal" the new fill
         }
 
         if (fillImage != null)
         {
-            if (fillImage.type == Image.Type.Filled)
+            if (freezeFillUntilDead && isAlive)
             {
-                fillImage.fillAmount = desiredFill;
+                // freeze visual fill (show full) until dead
+                if (fillImage.type == Image.Type.Filled) fillImage.fillAmount = 1f;
+                else
+                {
+                    var rt = fillImage.GetComponent<RectTransform>();
+                    if (rt != null) rt.sizeDelta = new Vector2(maxBarWidth * 1f, rt.sizeDelta.y);
+                }
             }
             else
             {
-                var rt = fillImage.GetComponent<RectTransform>();
-                if (rt != null) rt.sizeDelta = new Vector2(maxBarWidth * desiredFill, rt.sizeDelta.y);
+                if (fillImage.type == Image.Type.Filled)
+                {
+                    fillImage.fillAmount = desiredFill;
+                }
+                else
+                {
+                    var rt = fillImage.GetComponent<RectTransform>();
+                    if (rt != null) rt.sizeDelta = new Vector2(maxBarWidth * desiredFill, rt.sizeDelta.y);
+                }
             }
         }
 
