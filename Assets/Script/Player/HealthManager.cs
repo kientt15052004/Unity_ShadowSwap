@@ -72,12 +72,14 @@ public class HealthManager : MonoBehaviour
     public void TakeDamage(int damage)
     {
         if (isInvincible) return;
+
         PlayerMove pm = GetComponent<PlayerMove>();
         if (pm != null && pm.IsBlocking())
         {
             Debug.Log("Blocked damage!");
             return; // Chặn sát thương
         }
+
         currentHealth -= damage;
 
         UpdateUIAndAnimation();

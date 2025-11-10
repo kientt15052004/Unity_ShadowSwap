@@ -171,6 +171,6 @@ public class Hero_Knight : EnemyCore
             healthBarUI.UpdateHealth(0);
 
         base.OnDieLocal();
-        if (anim != null) SetAnimatorBoolSafe("Die", true);
+        if (anim != null) SetAnimatorBoolSafe("IsDead", true);
     }
 }
