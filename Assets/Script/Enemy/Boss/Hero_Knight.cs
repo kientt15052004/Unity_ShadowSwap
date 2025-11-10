@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using System.Collections;
 
 public class Hero_Knight : EnemyCore
 {
@@ -9,120 +8,72 @@ public class Hero_Knight : EnemyCore
     public override bool IsBossType => true;
 
     [Header("Boss Behavior")]
-    public float patrolRadius = 10f;
-    public float dodgeDistance = 2f;
-    public float dodgeDuration = 0.2f;
     public float blockDuration = 1.0f;
     [Range(0f, 1f)] public float blockChance = 0.3f;
     public float actionCooldown = 0.5f;
     private float lastActionTime = -999f;
 
-    [Header("Attack Fallback")]
-    [Tooltip("Nếu Animator không có event OnAttackHit, sử dụng fallback coroutine với delay này (số giây từ bắt đầu animation đến hit frame).")]
-    public float attackHitDelay = 0.22f;
-    [Tooltip("Nếu Animator không có event EndAttack, kết thúc attack sau attackDuration (giây).")]
-    public float attackDuration = 0.6f;
-    [Tooltip("Nếu true, sẽ tự động fallback khi không thấy animation event (debug).")]
-    public bool allowAttackFallback = true;
+    [Header("Animator")]
     public Animator animator;
+
+    [Header("Health Bar")]
+    public HealthBarUI healthBarUI;
+
     private Vector2 initialPosition;
 
-    // cache for whether animator events are expected (manually set to true if you added events)
     [Header("Animator event flags")]
-    [Tooltip("Bật true nếu animation attack của bạn có event gọi OnAttackHit() và EndAttack() chính xác.")]
     public bool animatorHasAttackEvents = false;
 
     protected override void Awake()
     {
-        base.Awake(); // đảm bảo EnemyCore khởi tạo anim, rb, healthComp, v.v.
+        base.Awake();
 
-        // --- Ensure animator assigned ---
+        // Animator
         if (anim == null)
         {
-            anim = GetComponent<Animator>();
-            if (anim == null)
-            {
-                // try children
-                anim = GetComponentInChildren<Animator>(true);
-            }
-            if (anim == null)
-            {
-                Debug.LogWarning($"[{name}] Animator not found on GameObject or children. Please add an Animator or assign it in Inspector.");
-            }
-            else
-            {
-                Debug.Log($"[{name}] Auto-assigned Animator: {anim.gameObject.name}");
-            }
+            anim = animator ?? GetComponent<Animator>() ?? GetComponentInChildren<Animator>(true);
+            if (anim != null) animator = anim;
+            else Debug.LogWarning($"[{name}] Animator not found.");
         }
 
-        // --- Ensure attackHitbox assigned ---
+        // AttackHitbox
         if (attackHitbox == null)
-        {
             attackHitbox = GetComponentInChildren<AttackHitbox>(true);
-            if (attackHitbox != null) Debug.Log($"[{name}] Auto-assigned AttackHitbox from children.");
-        }
 
-        // --- Ensure attackData assigned ---
+        // AttackData fallback
         if (attackData == null)
         {
-            // create lightweight runtime AttackData as fallback (still recommend assigning asset in Inspector)
             attackData = ScriptableObject.CreateInstance<AttackData>();
             attackData.damage = bossDamage;
             attackData.range = Mathf.Max(0.6f, attackRange);
             attackData.cooldown = Mathf.Max(0.2f, attackCooldown);
             attackData.hitLayers = attackData.hitLayers == 0 ? ~0 : attackData.hitLayers;
-            Debug.LogWarning($"[{name}] attackData missing -> runtime AttackData created as fallback. Assign real asset in Inspector.");
         }
+
+        initialPosition = transform.position;
     }
 
     protected override void Start()
     {
         base.Start();
-        initialPosition = transform.position;
-        patrolDistance = patrolRadius;
-        maxHealth = bossMaxHealth;
-        currentHealth = maxHealth;
 
-        Debug.Log($"[{name}] started. attackData.damage={attackData?.damage ?? -1}, attackHitbox={(attackHitbox != null)}");
+        initialPosition = transform.position;
+        maxHealth = bossMaxHealth;
+        currentHealth = GetComponent<Health>()?.Current ?? maxHealth;
+
+        if (healthBarUI != null)
+            healthBarUI.Initialize(transform, maxHealth, true);
     }
 
-    // SAFE Update override (uses EnemyCore helpers)
     protected override void Update()
     {
-        // guard: ensure anim exists before calling SetBool directly
-        if (anim == null && rb == null)
-        {
-            // try minimal recovery: get components
-            rb = GetComponent<Rigidbody2D>();
-            anim = GetComponent<Animator>();
-        }
-
-        // protect against animator null when calling animation methods
-        // use the protected helper SetAnimatorBoolSafe if available in EnemyCore (preferred)
-        // but also guard direct anim calls
-        if (IsDead)
-        {
-            base.Update();
-            return;
-        }
-
-        if (rb == null) rb = GetComponent<Rigidbody2D>();
-        if (anim == null) anim = GetComponent<Animator>(); // last attempt
-
-        if (IsHurt || IsBlocking)
-        {
-            UpdateAnimationFlags();
-            return;
-        }
+        if (IsDead) { base.Update(); return; }
+        if (IsBlocking) { UpdateAnimationFlags(); return; }
 
         if (player == null)
         {
             FindPlayer();
-            if (player == null)
-            {
-                UpdateAnimationFlags();
-                return;
-            }
+            if (player == null) { UpdateAnimationFlags(); return; }
         }
 
         float distanceToPlayer = Vector2.Distance(transform.position, player.position);
@@ -132,112 +83,54 @@ public class Hero_Knight : EnemyCore
         {
             if (distanceToPlayer <= attackRange)
             {
-                if (rb != null) rb.velocity = new Vector2(0f, rb.velocity.y);
+                rb.velocity = new Vector2(0f, rb.velocity.y);
                 TryAttack();
-                // fallback start if no animation events (allowAttackFallback controls this)
-                if (allowAttackFallback && !animatorHasAttackEvents && isAttacking && !IsInvoking(nameof(StartAttackFallback)))
-                {
-                    Invoke(nameof(StartAttackFallback), 0f);
-                }
             }
             else
             {
-                if (!IsAttacking)
-                {
-                    SimpleChase();
-                }
+                if (!isAttacking) SimpleChase();
             }
         }
         else
         {
-            if (rb != null) rb.velocity = new Vector2(0f, rb.velocity.y);
-            // safe set animator flag
-            try
-            {
-                // Prefer protected helper if available
-                animator.SetBool("Run", false);
-            }
-            catch
-            {
-                if (anim != null) anim.SetBool("Run", false);
-            }
+            rb.velocity = new Vector2(0f, rb.velocity.y);
+            if (anim != null) SetAnimatorBoolSafe("Run", false);
         }
 
         UpdateAnimationFlags();
         base.Update();
     }
 
-    // If animator events missing, fallback will call this to time the hit and end attack
-    private void StartAttackFallback()
-    {
-        // only start fallback when isAttacking true and an attack isn't already scheduled
-        if (!isAttacking) return;
-        StartCoroutine(AttackFallbackCoroutine());
-    }
-
-    private IEnumerator AttackFallbackCoroutine()
-    {
-        // wait until hit frame
-        yield return new WaitForSeconds(attackHitDelay);
-
-        // call same method animation event would call
-        OnAttackHit(); // this will use attackHitbox or fallback damage
-
-        // wait rest of animation then end attack
-        yield return new WaitForSeconds(Mathf.Max(0f, attackDuration - attackHitDelay));
-
-        EndAttack();
-    }
-
-    // Override OnAttackHit to ensure hitbox is used and fallback damage applied if needed
+    // Called by animation event
     public override void OnAttackHit()
     {
-        // 1) If attackHitbox present and attackData present -> use it (this covers normal case)
         if (attackHitbox != null && attackData != null)
         {
+            FaceTarget(player != null ? (Vector2)player.position : (Vector2)transform.position);
             attackHitbox.DoAttack(attackData, transform, isFacingRight);
         }
-        else
+        else if (player != null)
         {
-            Debug.LogWarning($"[{name}] OnAttackHit: attackHitbox or attackData missing. Applying fallback direct damage to player if possible.");
-            // fallback: direct damage to player if available
-            if (player != null)
-            {
-                var playerGO = player.gameObject;
-                // prefer IDamageable
-                var id = playerGO.GetComponent<IDamageable>();
-                if (id != null)
-                {
-                    id.TakeDamage(new DamageInfo(attackData != null ? attackData.damage : bossDamage, transform.position, gameObject, false));
-                }
-                else
-                {
-                    var hm = playerGO.GetComponent<HealthManager>();
-                    if (hm != null)
-                        hm.TakeDamage(attackData != null ? attackData.damage : bossDamage);
-                    else
-                        Debug.LogWarning($"[{name}] Fallback: player has no IDamageable nor HealthManager -> cannot apply damage.");
-                }
-            }
+            int dmg = attackData != null ? attackData.damage : bossDamage;
+            if (player.TryGetComponent<IDamageable>(out var id))
+                id.TakeDamage(new DamageInfo(dmg, transform.position, gameObject));
+            else if (player.TryGetComponent<HealthManager>(out var hm))
+                hm.TakeDamage(dmg);
         }
     }
 
-    // When boss dies, ensure attack fallback coroutines are stopped and healthbar updated
-    protected override void OnDieLocal()
+    public void Attack()
     {
-        // stop fallback coroutine if running
-        StopAllCoroutines();
-
-        // ensure the healthbar and UI get updated to zero if needed
-        if (healthBarInstance != null)
-        {
-            healthBarInstance.UpdateHealth(0);
-        }
-
-        base.OnDieLocal();
+        OnAttackHit();
     }
 
-    // override damage handler to maybe perform block/dodge
+    // Called by animation event
+    public new void EndAttack()
+    {
+        isAttacking = false;
+        if (anim != null) SetAnimatorBoolSafe("Attack", false);
+    }
+
     protected override void OnTakeDamageLocal(DamageInfo info)
     {
         if (IsDead) return;
@@ -248,42 +141,36 @@ public class Hero_Knight : EnemyCore
             return;
         }
 
+        lastActionTime = Time.time;
+
         if (Random.value < blockChance)
         {
-            StartCoroutine(BlockRoutine());
-        }
-        else
-        {
-            StartCoroutine(DodgeRoutine(info.origin));
+            // Block only
+            isBlocking = true;
+            rb.velocity = Vector2.zero;
+            if (anim != null) SetAnimatorBoolSafe("Block", true);
+            // Animation event EndBlock() will reset isBlocking
         }
 
-        lastActionTime = Time.time;
+        // Update health
+        currentHealth = Mathf.Max(currentHealth - info.amount, 0);
+        if (healthBarUI != null)
+            healthBarUI.OnDamagedShow(currentHealth);
     }
-
-    private IEnumerator BlockRoutine()
+    // Called by animation event
+    public void EndBlock()
     {
-        isBlocking = true;
-        rb.velocity = Vector2.zero;
-        animator.SetBool("Block", true);
-        yield return new WaitForSeconds(blockDuration);
         isBlocking = false;
-        animator.SetBool("Block", false);
+        if (anim != null) SetAnimatorBoolSafe("Block", false);
     }
 
-    private IEnumerator DodgeRoutine(Vector2 attackOrigin)
+    protected override void OnDieLocal()
     {
-        isHurt = true;
-        float directionToDodge = Mathf.Sign(transform.position.x - attackOrigin.x);
-        rb.velocity = new Vector2(directionToDodge * (chaseSpeed * 1.5f), rb.velocity.y);
-        // use trigger safely
-        if (anim != null) anim.SetTrigger("Dodge");
-        yield return new WaitForSeconds(dodgeDuration);
-        Vector2 clampedPos = new Vector2(
-            Mathf.Clamp(transform.position.x, initialPosition.x - patrolRadius, initialPosition.x + patrolRadius),
-            transform.position.y
-        );
-        transform.position = clampedPos;
-        rb.velocity = new Vector2(0f, rb.velocity.y);
-        isHurt = false;
+        StopAllCoroutines();
+        if (healthBarUI != null)
+            healthBarUI.UpdateHealth(0);
+
+        base.OnDieLocal();
+        if (anim != null) SetAnimatorBoolSafe("Die", true);
     }
 }

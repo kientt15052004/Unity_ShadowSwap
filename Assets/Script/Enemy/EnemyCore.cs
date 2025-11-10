@@ -670,7 +670,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
         return false;
     }
 
-    private void SetAnimatorBoolSafe(string paramName, bool value)
+    public void SetAnimatorBoolSafe(string paramName, bool value)
     {
         if (anim == null) return;
         if (HasAnimatorParameter(paramName))
