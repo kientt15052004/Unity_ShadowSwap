@@ -1,23 +1,71 @@
 ﻿using UnityEngine;
 
-// Đảm bảo EnemyCore luôn được thêm vào GameObject này
 [RequireComponent(typeof(EnemyCore))]
-public class GolemBase : MonoBehaviour
+public abstract class GolemAIBase : MonoBehaviour
 {
-    // Biến core được protected để Golem1 có thể truy cập
     protected EnemyCore core;
+    [Header("AI Tunables")]
+    public float detectionRange = 8f; // when to start chasing (not strictly needed if using core.chaseDistance)
+    public float stopDistance = 0.9f;
+
+    protected bool prevInRange = false;
 
     protected virtual void Awake()
     {
-        // KHẮC PHỤC GỐC RỄ CỦA LỖI NRE: Gán giá trị cho 'core'
-        core = GetComponent<EnemyCore>();
+        if (core == null) core = GetComponent<EnemyCore>();
+        if (core == null) Debug.LogError($"{name} GolemAIBase requires an EnemyCore on the same GameObject.");
+    }
 
-        if (core == null)
+    protected virtual void Update()
+    {
+        if (core == null) return;
+
+        core.UpdateAnimationFlags();
+
+        if (core.IsDead || core.IsHurt) return;
+
+        if (core.player == null)
         {
-            Debug.LogError($"GolemBase: Không tìm thấy component EnemyCore trên {gameObject.name}. Vui lòng kiểm tra lại cài đặt component.");
+            core.FindPlayer();
+            if (core.player == null) return;
+        }
+
+        float dist = Vector2.Distance(core.transform.position, core.player.position);
+        bool inRange = dist <= core.attackRange;
+        bool withinChase = dist <= core.chaseDistance;
+
+        if (inRange && !prevInRange) OnEnterAttackRange();
+        else if (!inRange && prevInRange) OnExitAttackRange();
+        prevInRange = inRange;
+
+        if (inRange)
+        {
+            core.FaceTarget(core.player.position);
+            OnAttackTriggered();
+            core.TryAttack();
+        }
+        else
+        {
+            if (core.IsAttacking) core.EndAttack();
+
+            if (withinChase)
+            {
+                core.FaceTarget(core.player.position);
+                core.SimpleChase();
+                core.FlipByVelocity();
+            }
+            else
+            {
+                core.SimplePatrol();
+                core.FlipByVelocity();
+            }
         }
     }
 
+    // Hooks
+    protected virtual void OnEnterAttackRange() { }
+    protected virtual void OnExitAttackRange() { }
+    protected virtual void OnAttackTriggered() { }
     public virtual void OnAttackHit() { }
     public virtual void OnDamaged(DamageInfo info) { }
     public virtual void OnDied() { }

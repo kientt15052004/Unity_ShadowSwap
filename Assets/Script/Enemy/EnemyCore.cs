@@ -1,5 +1,10 @@
 ﻿using System.Collections;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
+#if TMP_PRESENT
+using TMPro;
+#endif
 
 // ------------------------ Shared types (can be moved to separate files) ------------------------
 // (LƯU Ý: Nếu bạn đã tạo IDamageable_Structs.cs, bạn có thể xóa phần này)
@@ -71,13 +76,15 @@ public class AttackHitbox : MonoBehaviour
         if (data == null || origin == null) return;
 
         Vector2 center = (Vector2)origin.position + (isFacingRight ? Vector2.right : Vector2.left) * (data.range * 0.5f);
-
-        // REFACTOR: Sử dụng OverlapCircleNonAlloc để không tạo rác (GC)
         int hitCount = Physics2D.OverlapCircleNonAlloc(center, data.range, _hitsBuffer, data.hitLayers);
+
+        Debug.Log($"[AttackHitbox] origin={origin.name} center={center} range={data.range} hits={hitCount}");
 
         for (int i = 0; i < hitCount; i++)
         {
             var col = _hitsBuffer[i];
+            if (col == null) continue;
+            Debug.Log($"[AttackHitbox] hit collider: {col.name}, go={col.gameObject.name}");
 
             IDamageable d = col.GetComponent<IDamageable>();
             if (d == null)
@@ -85,12 +92,19 @@ public class AttackHitbox : MonoBehaviour
                 var monos = col.GetComponentsInParent<MonoBehaviour>(true);
                 foreach (var m in monos) if (m is IDamageable) { d = (IDamageable)m; break; }
             }
+
             if (d != null)
             {
+                Debug.Log($"[AttackHitbox] applying {data.damage} damage to {((MonoBehaviour)d).gameObject.name}");
                 d.TakeDamage(new DamageInfo(data.damage, origin.position, origin.gameObject, false));
                 if (data.hitVFX != null) Instantiate(data.hitVFX, col.transform.position, Quaternion.identity);
             }
-            // Clear the buffer slot after use
+            else
+            {
+                Debug.LogWarning($"[AttackHitbox] HIT but target is NOT IDamageable: {col.gameObject.name}");
+            }
+
+            // Clear buffer slot
             _hitsBuffer[i] = null;
         }
     }
@@ -126,6 +140,7 @@ public static class JumpMathUtility
 
 // ------------------------ EnemyCore (main file) ------------------------
 
+[RequireComponent(typeof(Rigidbody2D))]
 public class EnemyCore : MonoBehaviour, IDamageable
 {
     [Header("Movement")]
@@ -134,7 +149,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
     public float chaseDistance = 8f;
     public float chaseSpeed = 4f;
 
-
+    [Header("Wall/Jump")]
     public float wallCheckDistance = 0.6f;
     public float ledgeCheckDistance = 0.6f;
     public float jumpForce = 7f;
@@ -153,8 +168,11 @@ public class EnemyCore : MonoBehaviour, IDamageable
     public int maxHealth = 100;
     public float invincibilityTime = 0.15f;
 
-
-    public float directionChangeCooldown = 0.4f;
+    [Header("UI")]
+    [Tooltip("Optional: assign a HealthBarUI prefab (world-space). If left null, runtime bar will be created.")]
+    public GameObject healthBarPrefab;
+    public Transform uiRoot; // optional world-space canvas parent
+    public Vector3 healthBarOffset = new Vector3(0f, 1.2f, 0f);
 
     // internals
     [HideInInspector] public Rigidbody2D rb;
@@ -167,7 +185,6 @@ public class EnemyCore : MonoBehaviour, IDamageable
     [HideInInspector] public Vector2 targetPoint;
     [HideInInspector] public bool isFacingRight = true;
 
-    // Các trường protected cũ:
     protected int currentHealth;
     protected float lastHitAt = -999f;
     protected float lastAttackAt = -999f;
@@ -176,15 +193,22 @@ public class EnemyCore : MonoBehaviour, IDamageable
     protected bool isAttacking = false;
     protected float lastDirectionChangeAt = -999f;
     protected float lastJumpAt = -999f;
-    private float jumpCooldown = 0.5f;
+    protected float jumpCooldown = 0.5f;
     protected bool isBlocking = false;
 
-    // KHẮC PHỤC LỖI CS0122: Thêm Public Read-Only Properties
+    // exposed read-only properties
     public bool IsDead => isDead;
     public bool IsHurt => isHurt;
     public bool IsAttacking => isAttacking;
     public int CurrentHealth => currentHealth;
     public bool IsBlocking => isBlocking;
+    public virtual bool IsBossType => false;
+
+    // internal UI instance
+    private HealthBarUI healthBarInstance;
+
+    // small cooldown guard
+    public float directionChangeCooldown = 0.4f;
 
     protected virtual void Awake()
     {
@@ -192,13 +216,34 @@ public class EnemyCore : MonoBehaviour, IDamageable
         anim = GetComponent<Animator>();
         if (anim == null)
         {
-            Debug.LogError("EnemyCore on " + gameObject.name + " requires an Animator component!");
+            Debug.LogWarning($"[{name}] Animator missing on EnemyCore — animations will be skipped.");
         }
-        // Gỡ bỏ đoạn code thêm Health vì EnemyCore đã implement IDamageable
-        // if (GetComponent<IDamageable>() == null) gameObject.AddComponent<Health>(); 
 
         currentHealth = maxHealth;
         EnsureGroundCheck();
+        var healthComp = GetComponent<Health>();
+        if (healthComp != null)
+        {
+            // sync currentHealth with Health component
+            currentHealth = healthComp.Current;
+            healthComp.OnDamaged += (DamageInfo info) =>
+            {
+                // Đồng bộ máu:
+                currentHealth = healthComp.Current;
+
+                // **QUAN TRỌNG:** Phải gọi OnDamagedShow để kích hoạt hiển thị và cập nhật giá trị
+                if (healthBarInstance != null)
+                {
+                    healthBarInstance.OnDamagedShow(currentHealth);
+                }
+
+                // Kích hoạt logic hurt của EnemyCore (ví dụ: animation, dừng di chuyển)
+                OnTakeDamageLocal(info);
+
+                if (currentHealth <= 0) OnDieLocal();
+            };
+            healthComp.OnDied += () => { OnDieLocal(); };
+        }
     }
 
     protected virtual void Start()
@@ -208,21 +253,204 @@ public class EnemyCore : MonoBehaviour, IDamageable
         leftPoint = new Vector2(startPos.x - patrolDistance, startPos.y);
         rightPoint = new Vector2(startPos.x + patrolDistance, startPos.y);
         targetPoint = rightPoint;
+        currentHealth = maxHealth;
+
+        // Try resolve uiRoot automatically (prefer existing world-space Canvas)
+        if (uiRoot == null)
+        {
+            Canvas c = FindObjectOfType<Canvas>();
+            if (c != null && c.renderMode == RenderMode.WorldSpace) uiRoot = c.transform;
+        }
+
+        // 1) Try prefab (if assigned)
+        if (healthBarPrefab != null)
+        {
+            Debug.Log($"{name}: healthBarPrefab assigned -> attempting Instantiate...");
+            if (healthBarPrefab.GetComponent<EnemyCore>() != null)
+            {
+                Debug.LogWarning($"{name}: healthBarPrefab accidentally contains EnemyCore — skipping to avoid recursion.");
+            }
+            else
+            {
+                GameObject go = Instantiate(healthBarPrefab);
+                if (uiRoot != null) go.transform.SetParent(uiRoot, worldPositionStays: true);
+                // find HealthBarUI on root or children
+                HealthBarUI ui = go.GetComponent<HealthBarUI>() ?? go.GetComponentInChildren<HealthBarUI>();
+                if (ui != null)
+                {
+                    healthBarInstance = ui;
+                    PostInitHealthbar(go);
+                    Debug.Log($"{name}: healthbar instantiated from prefab -> OK. instance={go.name}");
+                }
+                else
+                {
+                    Debug.LogWarning($"{name}: Instantiated prefab but no HealthBarUI found on it or children. Prefab root: {go.name}");
+                    // keep instance for inspection but continue to fallback creation below
+                    Destroy(go); // remove incorrect prefab to avoid clutter
+                }
+            }
+        }
+
+        // 2) try find child in case healthbar was added manually to enemy
+        if (healthBarInstance == null)
+        {
+            HealthBarUI existing = GetComponentInChildren<HealthBarUI>(true);
+            if (existing != null)
+            {
+                healthBarInstance = existing;
+                PostInitHealthbar(healthBarInstance.gameObject);
+                Debug.Log($"{name}: Found child HealthBarUI and initialized it.");
+            }
+        }
+
+        // 3) fallback: create runtime healthbar (guaranteed to include HealthBarUI)
+        if (healthBarInstance == null)
+        {
+            Debug.LogWarning($"{name}: healthBarInstance IS NULL after prefab/child checks. Creating runtime fallback healthbar now...");
+            GameObject go = CreateRuntimeHealthBar();
+            if (go != null)
+            {
+                HealthBarUI ui = go.GetComponent<HealthBarUI>() ?? go.GetComponentInChildren<HealthBarUI>();
+                if (ui != null)
+                {
+                    healthBarInstance = ui;
+                    PostInitHealthbar(go);
+                    Debug.Log($"{name}: Runtime healthbar created and initialized. instance={go.name}");
+                }
+                else
+                {
+                    Debug.LogError($"{name}: Runtime healthbar created BUT HealthBarUI component NOT FOUND.");
+                    Destroy(go);
+                }
+            }
+        }
+
+        if (healthBarInstance == null)
+        {
+            Debug.LogWarning($"{name}: Final check -> healthBarInstance is STILL NULL. Enemy will run without healthbar.");
+        }
     }
 
+    // Helper called any time after instantiating/locating the healthbar root
+    private void PostInitHealthbar(GameObject hbRoot)
+    {
+        HealthBarUI ui = hbRoot.GetComponent<HealthBarUI>() ?? hbRoot.GetComponentInChildren<HealthBarUI>();
+        if (ui == null) return;
+
+        // compute vertical offset from renderer or collider
+        float spriteHeight = 0f;
+        var rend = GetComponentInChildren<Renderer>();
+        if (rend != null) spriteHeight = rend.bounds.size.y;
+        else
+        {
+            var col = GetComponent<Collider2D>();
+            if (col != null) spriteHeight = col.bounds.size.y;
+        }
+
+        // user asked: "muon thanh mau hien cao hon mot ti" -> add extraPadding
+        float extraPadding = 0.85f; // <-- bạn có thể chỉnh value này (đơn vị world units)
+        float yOffset = Mathf.Max(0.8f, spriteHeight * 0.6f) + extraPadding;
+        Vector3 computedOffset = new Vector3(0f, yOffset, 0f);
+
+        // parent to enemy so it follows exactly; use localPosition offset
+        hbRoot.transform.SetParent(this.transform, worldPositionStays: false);
+        hbRoot.transform.localPosition = computedOffset;
+        hbRoot.transform.localRotation = Quaternion.identity;
+
+        // set reasonable scale (tăng chút để dễ thấy)
+        float defaultScale = 0.04f; // tăng lên so với trước
+        hbRoot.transform.localScale = Vector3.one * defaultScale;
+
+        // ensure canvas settings
+        Canvas canvas = hbRoot.GetComponent<Canvas>() ?? hbRoot.GetComponentInChildren<Canvas>();
+        if (canvas != null)
+        {
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 1000;
+            if (Camera.main != null) canvas.worldCamera = Camera.main;
+        }
+
+        // init UI
+        ui.localOffset = computedOffset;
+        ui.faceCamera = true;
+
+        // pass measured background width if available
+        float bgWidth = 0f;
+        if (ui.backgroundImage != null)
+        {
+            var bgRT = ui.backgroundImage.GetComponent<RectTransform>();
+            if (bgRT != null) bgWidth = bgRT.rect.width;
+        }
+        if (bgWidth <= 0f) bgWidth = 120f;
+
+        ui.SetMaxWidth(bgWidth);
+        ui.Initialize(this.transform, maxHealth, IsBossType);
+    }
+
+    public void SpawnOrInitHealthBarNow()
+    {
+        if (healthBarInstance != null)
+        {
+            Debug.Log($"{name}: healthbar already present.");
+            return;
+        }
+        // Re-run the same init logic quickly (simple)
+        // Try prefab first
+        if (healthBarPrefab != null && healthBarPrefab.GetComponent<EnemyCore>() == null)
+        {
+            GameObject go = Instantiate(healthBarPrefab);
+            if (uiRoot != null) go.transform.SetParent(uiRoot, worldPositionStays: true);
+            HealthBarUI ui = go.GetComponent<HealthBarUI>() ?? go.GetComponentInChildren<HealthBarUI>();
+            if (ui != null)
+            {
+                healthBarInstance = ui;
+                healthBarInstance.localOffset = healthBarOffset;
+                healthBarInstance.Initialize(transform, maxHealth, IsBossType);
+                Debug.Log($"{name}: SpawnOrInit -> prefab instantiated and initialized.");
+                return;
+            }
+        }
+
+        // Try to find existing child
+        HealthBarUI existing = GetComponentInChildren<HealthBarUI>(true);
+        if (existing != null)
+        {
+            healthBarInstance = existing;
+            healthBarInstance.localOffset = healthBarOffset;
+            healthBarInstance.Initialize(transform, maxHealth, IsBossType);
+            Debug.Log($"{name}: SpawnOrInit -> found child HealthBarUI and initialized.");
+            return;
+        }
+
+        // Fallback runtime
+        GameObject fallback = CreateRuntimeHealthBar();
+        if (fallback != null)
+        {
+            if (uiRoot != null) fallback.transform.SetParent(uiRoot, worldPositionStays: true);
+            HealthBarUI ui = fallback.GetComponent<HealthBarUI>() ?? fallback.GetComponentInChildren<HealthBarUI>();
+            if (ui != null)
+            {
+                healthBarInstance = ui;
+                healthBarInstance.localOffset = healthBarOffset;
+                healthBarInstance.Initialize(transform, maxHealth, IsBossType);
+                Debug.Log($"{name}: SpawnOrInit -> runtime fallback created and initialized.");
+                return;
+            }
+        }
+
+        Debug.LogWarning($"{name}: SpawnOrInitHealthBarNow failed to create healthbar.");
+    }
     protected virtual void Update()
     {
         if (isDead) return;
         if (player == null) FindPlayer();
 
         UpdateAnimationFlags();
-
-        // AI Golem1 sẽ quản lý việc quay mặt (FaceTarget)
     }
 
     protected virtual void FixedUpdate()
     {
-        // Khi chết, bị thương hoặc đang tấn công, không cho di chuyển (chỉ giữ vận tốc Y)
         if (isDead || isHurt || isAttacking)
         {
             rb.velocity = new Vector2(0f, rb.velocity.y);
@@ -235,22 +463,17 @@ public class EnemyCore : MonoBehaviour, IDamageable
             return;
         }
 
-
         Vector2 dir = isFacingRight ? Vector2.right : Vector2.left;
-
         Vector2 baseOrigin = groundCheck != null ? (Vector2)groundCheck.position : (Vector2)transform.position;
         Vector2 rayOrigin = baseOrigin + (Vector2.up * 0.1f);
         float groundCheckRayLength = 1.2f + 0.1f;
 
         RaycastHit2D wall = Physics2D.Raycast(rayOrigin, dir, wallCheckDistance, groundLayer);
-
         Vector2 ledgeCheckStart = rayOrigin + dir * ledgeCheckDistance;
         bool groundAhead = Physics2D.Raycast(ledgeCheckStart, Vector2.down, groundCheckRayLength, groundLayer);
 
-        // --- XỬ LÝ KHI GẶP TƯỜNG ---
         if (wall.collider != null)
         {
-            // Điều kiện nhảy tường:
             if (player != null && player.position.y > transform.position.y + 0.4f && IsGrounded())
             {
                 if (Time.time > lastJumpAt + jumpCooldown)
@@ -264,13 +487,11 @@ public class EnemyCore : MonoBehaviour, IDamageable
                 ReverseDirection();
             }
         }
-        // --- XỬ LÝ KHI GẶP RÌA VỰC ---
         else if (!groundAhead && IsGrounded())
         {
-            // Điều kiện nhảy qua khe hở:
             if (player != null && player.position.y > transform.position.y + 0.3f &&
-            Mathf.Abs(player.position.x - transform.position.x) <= maxJumpableGap &&
-            Time.time > lastJumpAt + jumpCooldown)
+                Mathf.Abs(player.position.x - transform.position.x) <= maxJumpableGap &&
+                Time.time > lastJumpAt + jumpCooldown)
             {
                 JumpTowardsPlayer();
                 lastJumpAt = Time.time;
@@ -282,13 +503,11 @@ public class EnemyCore : MonoBehaviour, IDamageable
         }
     }
 
-
-    // -- movement helpers --
+    // movement helpers
     public void SimplePatrol()
     {
         if (isAttacking || Time.time < lastDirectionChangeAt + directionChangeCooldown) return;
-
-        if (anim != null) anim.SetBool("Run", true);
+        SetAnimatorBoolSafe("Run", true);
         if (Vector2.Distance(transform.position, targetPoint) < 0.2f) targetPoint = (targetPoint == rightPoint) ? leftPoint : rightPoint;
         MoveTowards(targetPoint, patrolSpeed);
     }
@@ -296,8 +515,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
     public void SimpleChase()
     {
         if (isAttacking || Time.time < lastDirectionChangeAt + directionChangeCooldown) return;
-
-        if (anim != null) anim.SetBool("Run", true);
+        SetAnimatorBoolSafe("Run", true);
         if (player != null) MoveTowards(player.position, chaseSpeed);
     }
 
@@ -307,38 +525,37 @@ public class EnemyCore : MonoBehaviour, IDamageable
         rb.velocity = new Vector2(dir.x * speed, rb.velocity.y);
     }
 
-    // -- Attack control (bool-based animation) --
+    // Attack control
     public virtual void TryAttack()
     {
         if (Time.time < lastAttackAt + attackCooldown) return;
-        if (isAttacking) return;
-        lastAttackAt = Time.time;
+        if (isAttacking || isHurt || isDead) return;
 
-        rb.velocity = new Vector2(0f, rb.velocity.y);
+        lastAttackAt = Time.time;
         isAttacking = true;
-        if (anim != null) anim.SetBool("IsAttacking", true);
+        rb.velocity = new Vector2(0f, rb.velocity.y);
+        SetAnimatorBoolSafe("IsAttacking", true);
+        // If you use animation events, they should call OnAttackHit() and EndAttack()
+        // Optionally you can implement a coroutine fallback in subclass.
     }
 
-    // Animation event at hit frame should call this to apply damage
-    public void OnAttackHit()
+    // Called from animation event at the hit frame
+    public virtual void OnAttackHit()
     {
         if (attackHitbox != null && attackData != null)
-        {
             attackHitbox.DoAttack(attackData, transform, isFacingRight);
-        }
     }
 
-    // Animation event at the END of the attack animation should call this to finish attack state
-    public void EndAttack()
+    // Called from animation event at the end of the attack animation
+    public virtual void EndAttack()
     {
         isAttacking = false;
-        if (anim != null) anim.SetBool("IsAttacking", false);
+        SetAnimatorBoolSafe("IsAttacking", false);
     }
 
     public void ReverseDirection()
     {
         lastDirectionChangeAt = Time.time;
-
         rb.velocity = Vector2.zero;
         Flip();
         targetPoint = (targetPoint == rightPoint) ? leftPoint : rightPoint;
@@ -347,26 +564,39 @@ public class EnemyCore : MonoBehaviour, IDamageable
     public void TryJump() { if (IsGrounded()) rb.velocity = new Vector2(rb.velocity.x, jumpForce); }
     public void JumpTowardsPlayer() { if (IsGrounded() && player != null) { Vector2 dir = ((Vector2)player.position - (Vector2)transform.position).normalized; rb.velocity = new Vector2(dir.x * patrolSpeed, jumpForce); } }
 
-    // -- damage / health handling --
+    // Damage / health handling (IDamageable)
     public virtual void TakeDamage(DamageInfo info)
     {
+        Debug.Log($"[EnemyCore.TakeDamage] {name} taking {info.amount} damage from {(info.source != null ? info.source.name : "unknown")} (isBlocking={isBlocking})");
+
         if (isDead) return;
-        if (Time.time < lastHitAt + invincibilityTime) return;
-        // >> LOGIC ĐỠ ĐÒN <<
+        if (Time.time < lastHitAt + invincibilityTime) { Debug.Log("[EnemyCore] ignore due to invincibility"); return; }
+
         if (isBlocking)
         {
-            // Tắt bị thương và animation Hurt
-            isHurt = false;
-            if (anim != null) anim.SetBool("IsHurt", false);
-
-            Debug.Log($"[{gameObject.name}] Blocked {info.amount} damage!");
-            // Giảm sát thương nhận vào (Ví dụ: 80% giảm sát thương)
             info.amount = Mathf.RoundToInt(info.amount * 0.2f);
-            // Có thể thêm hiệu ứng/âm thanh chặn ở đây
         }
-            lastHitAt = Time.time;
+
+        lastHitAt = Time.time;
         currentHealth -= info.amount;
-        OnTakeDamageLocal(info);
+        if (currentHealth < 0) currentHealth = 0;
+
+        Debug.Log($"[EnemyCore] {name} HP now {currentHealth}/{maxHealth}");
+
+        OnTakeDamageLocal(info); // current behavior, animations...
+
+        // **ĐẢM BẢO cập nhật UI ở đây**
+        if (healthBarInstance != null)
+        {
+            // gọi OnDamagedShow để đảm bảo healthbar hiện khi bị đòn và reset auto-hide timer
+            healthBarInstance.OnDamagedShow(currentHealth);
+            Debug.Log($"{name}: healthBarInstance.OnDamagedShow({currentHealth}) called");
+        }
+        else
+        {
+            Debug.LogWarning($"{name}: healthBarInstance is NULL when taking damage!");
+        }
+
         if (currentHealth <= 0) OnDieLocal();
     }
 
@@ -374,112 +604,187 @@ public class EnemyCore : MonoBehaviour, IDamageable
     {
         if (isDead) return;
         isHurt = true;
-
-        Debug.Log($"[Enemy Health] {gameObject.name} took {info.amount} damage from {info.source.name}! Remaining Health: {currentHealth}/{maxHealth}");
+        Debug.Log($"[Enemy Health] {gameObject.name} took {info.amount} damage from {(info.source != null ? info.source.name : "unknown")}. Remaining: {currentHealth}/{maxHealth}");
 
         if (isAttacking)
         {
             isAttacking = false;
-            if (anim != null) anim.SetBool("IsAttacking", false);
+            SetAnimatorBoolSafe("IsAttacking", false);
         }
+
         rb.velocity = Vector2.zero;
         StartCoroutine(HurtRoutine());
     }
 
     protected IEnumerator HurtRoutine()
     {
-        if (anim != null) anim.SetBool("IsHurt", true);
+        SetAnimatorBoolSafe("IsHurt", true);
         yield return new WaitForSeconds(0.45f);
-        if (anim != null) anim.SetBool("IsHurt", false);
+        SetAnimatorBoolSafe("IsHurt", false);
         isHurt = false;
     }
 
     protected virtual void OnDieLocal()
     {
         isDead = true;
-        if (anim != null) anim.SetBool("IsDead", true);
+        SetAnimatorBoolSafe("IsDead", true);
+
+        // disable physics interaction but keep object alive so death animation and events can run
         rb.velocity = Vector2.zero;
-
-        // TẮT CHỨC NĂNG DI CHUYỂN CỦA SCRIPT NÀY NHƯNG VẪN CHO ANIMATION EVENT CHẠY
-        this.enabled = true;
-
-        // ** LOẠI BỎ: Không tắt Collider và Destroy ở đây **
-        // var c = GetComponent<Collider2D>();
-        // if (c) c.enabled = false;
-        // Destroy(gameObject, 3f); 
-    }
-
-    // ----------- HÀM MỚI ĐƯỢC GỌI BẰNG ANIMATION EVENT -----------
-
-    // 1. Dùng Animation Event để gọi hàm này ở frame BẮT ĐẦU Death Animation
-    // Tắt các tương tác vật lý nhưng vẫn giữ lại object để Animation chạy
-    public void DisableCollidersAndPhysics()
-    {
-        Debug.Log($"[{gameObject.name}] Physics Disabled. Starting Death Animation.");
-
-        // Tắt Collider chính
         var c = GetComponent<Collider2D>();
         if (c) c.enabled = false;
-
-        // Tắt Rigidbody để ngăn va chạm và rơi rớt
         if (rb) rb.bodyType = RigidbodyType2D.Kinematic;
 
-        // Tắt các script khác (trừ script này) nếu cần
-        // Ví dụ: GetComponents<MonoBehaviour>().ToList().ForEach(s => { if (s != this) s.enabled = false; });
+        // hide healthbar
+        if (healthBarInstance != null) healthBarInstance.Hide();
+
+        Debug.Log($"[{gameObject.name}] died (OnDieLocal). Waiting for DestroySelf() animation event if any.");
     }
 
-    // 2. Dùng Animation Event để gọi hàm này ở frame CUỐI CÙNG của Death Animation
+    // Animation event helpers (call from animation)
+    public void DisableCollidersAndPhysics()
+    {
+        var c = GetComponent<Collider2D>();
+        if (c) c.enabled = false;
+        if (rb) rb.bodyType = RigidbodyType2D.Kinematic;
+        Debug.Log($"[{gameObject.name}] Physics disabled by animation event.");
+    }
+
     public void DestroySelf()
     {
-        Debug.Log($"[{gameObject.name}] Death Animation finished. Destroying object.");
+        Debug.Log($"[{gameObject.name}] DestroySelf called by animation event.");
         Destroy(gameObject);
     }
 
-    // ----------- HÀM MỚI ĐƯỢC GỌI BẰNG ANIMATION EVENT -----------
-
-
-    // -- utilities --
+    // Utilities
     public void FindPlayer() { var go = GameObject.FindGameObjectWithTag("Player"); if (go != null) player = go.transform; }
-    public void FlipByVelocity() { if (rb.velocity.x > 0.1f && !isFacingRight) Flip(); else if (rb.velocity.x < -0.1f && isFacingRight) Flip(); }
-
-    /// <summary> Quay mặt về hướng ngược lại. </summary>
+    public void FlipByVelocity() { if (rb != null && rb.velocity.x > 0.1f && !isFacingRight) Flip(); else if (rb != null && rb.velocity.x < -0.1f && isFacingRight) Flip(); }
     public void Flip() { isFacingRight = !isFacingRight; var s = transform.localScale; s.x *= -1f; transform.localScale = s; }
+    public void FaceTarget(Vector2 targetPosition) { float direction = targetPosition.x - transform.position.x; if (direction > 0 && !isFacingRight) Flip(); else if (direction < 0 && isFacingRight) Flip(); }
 
-    /// <summary> Buộc Golem quay mặt về phía vị trí mục tiêu. </summary>
-    public void FaceTarget(Vector2 targetPosition)
+    private bool HasAnimatorParameter(string paramName)
     {
-        float direction = targetPosition.x - transform.position.x;
+        if (anim == null) return false;
+        var pars = anim.parameters;
+        for (int i = 0; i < pars.Length; i++) if (pars[i].name == paramName) return true;
+        return false;
+    }
 
-        if (direction > 0 && !isFacingRight)
+    private void SetAnimatorBoolSafe(string paramName, bool value)
+    {
+        if (anim == null) return;
+        if (HasAnimatorParameter(paramName))
         {
-            Flip();
-        }
-        else if (direction < 0 && isFacingRight)
-        {
-            Flip();
+            anim.SetBool(paramName, value);
         }
     }
 
-    public void EnsureGroundCheck() { if (groundCheck != null) return; GameObject go = new GameObject("GroundCheck"); go.transform.parent = transform; go.transform.localPosition = Vector3.zero; groundCheck = go.transform; groundCheckRadius = 0.12f; }
-    public bool IsGrounded() { if (groundCheck == null) return false; return Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer); }
     public void UpdateAnimationFlags()
     {
         if (anim == null) return;
-        anim.SetBool("IsAttacking", isAttacking);
-        anim.SetBool("IsHurt", isHurt);
-        anim.SetBool("IsDead", isDead);
-        anim.SetBool("IsBlocking", isBlocking);
-        anim.SetBool("IsJumping", !IsGrounded() && rb.velocity.y > 0.05f);
-        anim.SetBool("Run", IsGrounded() && Mathf.Abs(rb.velocity.x) > 0.1f);
+
+        SetAnimatorBoolSafe("IsAttacking", isAttacking);
+        SetAnimatorBoolSafe("IsHurt", isHurt);
+        SetAnimatorBoolSafe("IsDead", isDead);
+        SetAnimatorBoolSafe("IsBlocking", isBlocking);
+
+        // common movement flags
+        bool isJumping = !IsGrounded() && rb != null && rb.velocity.y > 0.05f;
+        SetAnimatorBoolSafe("IsJumping", isJumping);
+
+        bool isRunning = IsGrounded() && rb != null && Mathf.Abs(rb.velocity.x) > 0.1f;
+        SetAnimatorBoolSafe("Run", isRunning);
+        SetAnimatorBoolSafe("IsMoving", isRunning);
     }
 
-    // Expose helper: simulate jump arc to decide if enemy should attempt jump
-    public bool CanReachByJump(Vector2 target)
+    // Groundhelpers
+    public void EnsureGroundCheck() { if (groundCheck != null) return; GameObject go = new GameObject("GroundCheck"); go.transform.parent = transform; go.transform.localPosition = Vector3.zero; groundCheck = go.transform; groundCheckRadius = 0.12f; }
+    public bool IsGrounded() { if (groundCheck == null) return false; return Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer); }
+
+    // Create a simple runtime healthbar (fallback)
+    private GameObject CreateRuntimeHealthBar()
     {
-        return JumpMathUtility.CanReachByJump(transform.position, target, patrolSpeed, jumpForce, Mathf.Abs(Physics2D.gravity.y * rb.gravityScale), groundLayer, 0.02f, 2f, groundCheckRadius);
+        GameObject root = new GameObject($"{name}_HPBar_Runtime");
+
+        // Canvas
+        Canvas canvas = root.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 1000;
+        if (Camera.main != null) canvas.worldCamera = Camera.main;
+
+        // Scaler & Raycaster
+        var cs = root.AddComponent<CanvasScaler>();
+        cs.uiScaleMode = CanvasScaler.ScaleMode.ConstantPhysicalSize;
+        cs.dynamicPixelsPerUnit = 10f;
+        root.AddComponent<GraphicRaycaster>();
+
+        RectTransform rootRect = root.GetComponent<RectTransform>();
+        rootRect.sizeDelta = new Vector2(200f, 32f);
+
+        // 1. Background (Lớp dưới cùng)
+        GameObject bg = new GameObject("BG");
+        bg.transform.SetParent(root.transform, false);
+        Image bgImg = bg.AddComponent<Image>();
+        bgImg.color = new Color(0f, 0f, 0f, 0.6f);
+        RectTransform bgRect = bg.GetComponent<RectTransform>();
+        bgRect.anchorMin = Vector2.zero; bgRect.anchorMax = Vector2.one;
+        bgRect.offsetMin = Vector2.zero; bgRect.offsetMax = Vector2.zero;
+
+        // 2. Loss Fill (Thanh trắng/vàng, chạy chậm - Lớp giữa)
+        GameObject loss = new GameObject("LossFill");
+        loss.transform.SetParent(bg.transform, false);
+        Image lossImg = loss.AddComponent<Image>();
+        lossImg.type = Image.Type.Filled; // Đặt kiểu Filled
+        lossImg.fillMethod = Image.FillMethod.Horizontal;
+        lossImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+        lossImg.fillAmount = 1f;
+        lossImg.color = Color.white; // Màu trắng cho hiệu ứng mất máu
+        RectTransform lossRect = loss.GetComponent<RectTransform>();
+        lossRect.anchorMin = new Vector2(0f, 0f); lossRect.anchorMax = new Vector2(1f, 1f);
+        lossRect.offsetMin = new Vector2(4f, 4f); lossRect.offsetMax = new Vector2(-4f, -4f);
+
+        // 3. Fill (Thanh đỏ, cập nhật ngay lập tức - Lớp trên cùng)
+        GameObject fill = new GameObject("Fill");
+        fill.transform.SetParent(bg.transform, false);
+        Image fillImg = fill.AddComponent<Image>();
+        fillImg.type = Image.Type.Filled; // Đặt kiểu Filled
+        fillImg.fillMethod = Image.FillMethod.Horizontal;
+        fillImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+        fillImg.fillAmount = 1f;
+        fillImg.color = Color.red;
+        RectTransform fillRect = fill.GetComponent<RectTransform>();
+        fillRect.anchorMin = new Vector2(0f, 0f); fillRect.anchorMax = new Vector2(1f, 1f);
+        fillRect.offsetMin = new Vector2(4f, 4f); fillRect.offsetMax = new Vector2(-4f, -4f);
+
+        // Text (optional)
+        GameObject txtGO = new GameObject("HPText");
+        txtGO.transform.SetParent(root.transform, false);
+        // SỬA LỖI: Dùng TextMeshProUGUI thay vì UnityEngine.UI.Text
+        TextMeshProUGUI healthText = txtGO.AddComponent<TextMeshProUGUI>();
+        healthText.text = "100/100";
+        healthText.fontSize = 18f;
+        healthText.alignment = TextAlignmentOptions.Center;
+        RectTransform txtRect = healthText.GetComponent<RectTransform>();
+        txtRect.anchorMin = Vector2.zero; txtRect.anchorMax = Vector2.one;
+        txtRect.offsetMin = Vector2.zero; txtRect.offsetMax = Vector2.zero;
+
+        // Add HealthBarUI và GÁN CÁC THAM CHIẾU
+        HealthBarUI ui = root.AddComponent<HealthBarUI>();
+        ui.worldCanvas = canvas;
+        ui.fillImage = fillImg;
+        ui.backgroundImage = bgImg;
+        ui.lossImage = lossImg; // Gán Loss Image
+        ui.healthText = healthText; // Gán TextMeshProUGUI
+
+        // default transform (will be adjusted by PostInitHealthbar)
+        root.transform.localScale = Vector3.one * 0.04f;
+
+        return root;
     }
 
-    // Debug gizmos (Đã chỉnh lại để Gizmo vẽ đúng vị trí kiểm tra)
+
+    // Debug gizmos
     void OnDrawGizmosSelected()
     {
         if (groundCheck != null)
@@ -489,16 +794,13 @@ public class EnemyCore : MonoBehaviour, IDamageable
         }
 
         Vector2 dir = isFacingRight ? Vector2.right : Vector2.left;
-
         Vector2 baseOrigin = groundCheck != null ? (Vector2)groundCheck.position : (Vector2)transform.position;
         Vector2 rayOrigin = baseOrigin + (Vector2.up * 0.1f);
         float groundCheckRayLength = 1.3f;
 
-        // Wall Check Gizmo (Horizontal)
         Gizmos.color = Color.red;
         Gizmos.DrawLine(rayOrigin, rayOrigin + dir * wallCheckDistance);
 
-        // Ledge Check Gizmo (Vertical)
         Gizmos.color = Color.yellow;
         Vector2 ledgeCheckStart = rayOrigin + dir * ledgeCheckDistance;
         Gizmos.DrawLine(ledgeCheckStart, ledgeCheckStart + Vector2.down * groundCheckRayLength);

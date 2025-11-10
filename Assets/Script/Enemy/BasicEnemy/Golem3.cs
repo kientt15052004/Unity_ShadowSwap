@@ -1,113 +1,57 @@
 ﻿using UnityEngine;
 
-// Golem3 kế thừa từ GolemBase, chứa logic AI cụ thể cho Golem này.
-public class Golem3 : GolemBase
+[RequireComponent(typeof(EnemyCore))]
+public class Golem3 : GolemAIBase
 {
-    // Dùng để theo dõi sự thay đổi trạng thái tấn công nhằm điều chỉnh tốc độ Player
-    private bool prevAttack = false;
+    public int baseDamage = 10;
+    public int comboStep = 2;
+    int comboBonus = 0;
 
-    // Biến lưu trữ sát thương cộng thêm cho combo
-    private int damageInterval = 0;
-
-    protected void Update()
+    protected override void Awake()
     {
-        // --- 1. Kiểm tra An Toàn và Trạng Thái ---
-        if (core != null)
-        {
-            core.UpdateAnimationFlags();
-        }
-        if (core.IsDead || core.IsHurt)
-        {
-            return;
-        }
-
-        if (core.player == null)
-        {
-            core.FindPlayer();
-            if (core.player == null) return;
-        }
-
-        // --- 2. Xác định Khoảng cách và Phạm vi ---
-        float distanceToPlayer = Vector2.Distance(core.transform.position, core.player.position);
-        bool isInAttackRange = distanceToPlayer <= core.attackRange;
-
-        if (isInAttackRange)
-        {
-            // --- HÀNH VI 1: TẤN CÔNG (trong tầm) ---
-            // BẮT BUỘC: Quay mặt về phía Player trước khi tấn công
-            core.FaceTarget(core.player.position);
-            core.TryAttack();
-
-            // LƯU Ý: Sát thương thực tế được xử lý trong OnAttackHit()
-        }
-        else // Player đã ra khỏi tầm tấn công
-        {
-            // Buộc thoát khỏi trạng thái tấn công nếu Player ra khỏi tầm
-            if (core.IsAttacking)
-            {
-                core.EndAttack();
-                // Khôi phục combo damage khi Golem dừng tấn công (hoặc Player thoát tầm)
-                damageInterval = 0;
-            }
-
-            // --- HÀNH VI 2: ĐUỔI THEO hoặc TUẦN TRA ---
-            if (distanceToPlayer <= core.chaseDistance)
-            {
-                // Đuổi theo
-                // BẮT BUỘC: Quay mặt về phía Player khi đuổi theo
-                core.SimpleChase();
-                core.FlipByVelocity();
-                // Khôi phục combo damage khi Golem chuyển sang đuổi theo
-                damageInterval = 0;
-            }
-            else
-            {
-                // Tuần tra
-                core.SimplePatrol();
-                core.FlipByVelocity();
-                damageInterval = 0;
-            }
-        }
-
+        base.Awake();
     }
 
-    // --- Các hàm Override (được gọi từ EnemyCore) ---
+    protected override void OnExitAttackRange()
+    {
+        comboBonus = 0;
+    }
 
-    // Hàm này được gọi khi Animation Event tại frame hit xảy ra
     public override void OnAttackHit()
     {
-        // 1. Gây sát thương mặc định (sử dụng logic hitbox của core)
-        base.OnAttackHit();
+        if (core == null || core.player == null) return;
 
-        // 2. Gây sát thương bổ sung theo Combo
-        HealthManager hm = core.player.GetComponent<HealthManager>();
-        if (hm != null)
+        var playerGO = core.player.gameObject;
+        var id = playerGO.GetComponent<IDamageable>();
+
+        int totalDamage = baseDamage + comboBonus;
+
+        if (id == null)
         {
-            // Sát thương cơ bản (giả định 10) + Sát thương cộng thêm
-            int totalBonusDamage = damageInterval+10;
-
-            // Chỉ gây sát thương combo nếu Golem đang tấn công (ngăn chặn bug)
-            if (core.IsAttacking)
+            var hm = playerGO.GetComponent<HealthManager>();
+            if (hm != null && core.IsAttacking)
             {
-                hm.TakeDamage(totalBonusDamage);
-
-                // Tăng sát thương cho lần tấn công tiếp theo
-                damageInterval += 2;
-                Debug.Log($"Golem hit! Bonus Damage: {totalBonusDamage}. Next Bonus: {damageInterval}");
+                hm.TakeDamage(totalDamage);
+                comboBonus += comboStep;
+            }
+        }
+        else
+        {
+            // If IDamageable exists, assume base AttackHitbox does baseDamage.
+            // Apply only the combo bonus via IDamageable if desired:
+            if (core.IsAttacking && comboBonus > 0)
+            {
+                id.TakeDamage(new DamageInfo(comboBonus, core.transform.position, gameObject, false));
+                comboBonus += comboStep;
             }
         }
     }
-
 
     public override void OnDamaged(DamageInfo info)
     {
         base.OnDamaged(info);
-
-        // Đặt lại sát thương combo khi Golem bị thương
-        damageInterval = 0;
-
+        comboBonus = 0;
     }
-
 
     public override void OnDied()
     {
