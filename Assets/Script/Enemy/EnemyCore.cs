@@ -187,7 +187,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
 
     protected int currentHealth;
     protected float lastHitAt = -999f;
-    protected float lastAttackAt = -999f;
+    public float lastAttackAt = -999f;
     protected bool isHurt = false;
     protected bool isDead = false;
     protected bool isAttacking = false;
@@ -600,7 +600,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
         if (currentHealth <= 0) OnDieLocal();
     }
 
-    protected virtual void OnTakeDamageLocal(DamageInfo info)
+    public virtual void OnTakeDamageLocal(DamageInfo info)
     {
         if (isDead) return;
         isHurt = true;
@@ -624,7 +624,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
         isHurt = false;
     }
 
-    protected virtual void OnDieLocal()
+    public virtual void OnDieLocal()
     {
         isDead = true;
         SetAnimatorBoolSafe("IsDead", true);

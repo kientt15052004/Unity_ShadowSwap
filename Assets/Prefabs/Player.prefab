@@ -133,6 +133,14 @@ MonoBehaviour:
     m_Bits: 8
   footstepInterval: 0.3
   hurtSoundInterval: 1
+  redKeyPrefab: {fileID: 0}
+  keyRedCollected: 0
+  scoreText: {fileID: 0}
+  keyGoldIconImage: {fileID: 0}
+  keyGoldText: {fileID: 0}
+  keyRedIconImage: {fileID: 0}
+  keyRedText: {fileID: 0}
+  isBlocking: 0
 --- !u!50 &6212939070587508256
 Rigidbody2D:
   serializedVersion: 4
@@ -201,10 +209,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   attackRadius: 1
-  attackDamage: 15
+  attackDamage: 10
   enemyLayer:
     serializedVersion: 2
     m_Bits: 4294967295
+  hitCooldown: 0.05
 --- !u!1 &9222401671872879536
 GameObject:
   m_ObjectHideFlags: 0
