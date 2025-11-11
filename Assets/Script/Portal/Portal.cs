@@ -14,95 +14,145 @@ public class Portal : MonoBehaviour
     public bool requiresRedKey = false;
 
     [Header("Đây có phải là Cổng Kết thúc Game?")]
-    public bool isFinalLevel = false; // Đánh dấu nếu đây là map cuối
+    public bool isFinalLevel = false;
 
     private bool isTransitioning = false;
+    private GameObject playerObject;
+    private PlayerMove playerMoveScript;
+    private PauseManager pauseManager; // MỚI: Dùng để kiểm soát Pause
+
+    void Start()
+    {
+        // Lấy tham chiếu đến PauseManager (Giả sử có 1 instance trong Scene)
+        pauseManager = FindObjectOfType<PauseManager>();
+    }
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
         if (collision.CompareTag("Player") && !isTransitioning)
         {
-            // Kiểm tra Key Đỏ nếu yêu cầu
-            if (requiresRedKey)
-            {
-                PlayerMove playerMove = collision.GetComponent<PlayerMove>();
+            playerMoveScript = collision.GetComponent<PlayerMove>();
+            if (playerMoveScript == null) return;
 
-                if (playerMove != null)
-                {
-                    // Kiểm tra số lượng Key Đỏ
-                    if (playerMove.keyRedCollected > 0)
-                    {
-                        // Đủ key: Sử dụng 1 Key Đỏ và tiếp tục dịch chuyển
-                        playerMove.UseRedKey();
-                        isTransitioning = true;
-                        StartCoroutine(Transition(collision.gameObject));
-                        return;
-                    }
-                    else
-                    {
-                        // Không đủ key
-                        Debug.Log("Cổng đã bị khóa! Cần Chìa khóa Đỏ.");
-                        return;
-                    }
-                }
+            // 1. KIỂM TRA CHÌA KHÓA
+            if (requiresRedKey && playerMoveScript.keyRedCollected <= 0)
+            {
+                Debug.Log("Cổng đã bị khóa! Cần Chìa khóa Đỏ.");
+                return;
             }
 
-            // Dịch chuyển nếu không cần Key hoặc kiểm tra Key không được bật
             isTransitioning = true;
-            StartCoroutine(Transition(collision.gameObject));
+            playerObject = collision.gameObject;
+
+            // 2. KHÓA INPUT CỦA PLAYER (Chỉ khóa PlayerMove, PauseManager sẽ lo TimeScale)
+            Rigidbody2D playerRb = playerObject.GetComponent<Rigidbody2D>();
+            if (playerRb != null) playerRb.velocity = Vector2.zero;
+            playerMoveScript.enabled = false;
+
+            // 3. LOGIC CỔNG CUỐI HAY CỔNG BÌNH THƯỜNG
+            if (isFinalLevel)
+            {
+                StartCoroutine(FinalLevelStop(playerObject, playerMoveScript));
+            }
+            else
+            {
+                // LOGIC CỔNG CHUYỂN MÀN BÌNH THƯỜNG (PAUSE & OPTIONS)
+
+                if (pauseManager != null)
+                {
+                    pauseManager.Pause(); // DỪNG GAME BẰNG PAUSE MANAGER
+                }
+                else
+                {
+                    Time.timeScale = 0f; // Dự phòng
+                }
+
+                if (UIManager.Instance != null)
+                {
+                    UIManager.Instance.ShowPortalOptions(this); // HIỂN THỊ MENU OPTIONS
+                }
+                else
+                {
+                    Debug.LogError("UIManager.Instance không tìm thấy!");
+                }
+            }
         }
     }
 
-    private IEnumerator Transition(GameObject player)
+    // -----------------------------------------------------------
+    // HÀM CÔNG KHAI DÀNH CHO BUTTON CỦA UI
+    // -----------------------------------------------------------
+
+    public void ContinueToNextLevel()
     {
-        // (Tuỳ chọn) Hiệu ứng fade hoặc delay
-        yield return new WaitForSeconds(0.5f);
+        if (UIManager.Instance != null) UIManager.Instance.HidePortalOptions();
 
-        // LOGIC MỚI: DỪNG KHI ĐẾN CỔNG CUỐI
-        if (isFinalLevel)
+        // Mở khóa game bằng Resume
+        if (pauseManager != null)
         {
-            Debug.Log("🎉 HOÀN THÀNH TRÒ CHƠI! Dừng dịch chuyển tại cổng cuối.");
-
-            // 1. Tạm dừng Player (Ngăn chuyển động vật lý)
-            Rigidbody2D playerRb = player.GetComponent<Rigidbody2D>();
-            if (playerRb != null)
-            {
-                playerRb.velocity = Vector2.zero;
-                // Tùy chọn: Đảm bảo trọng lực không kéo nhân vật đi
-                playerRb.isKinematic = true;
-            }
-
-            // 2. KHÓA INPUT (Vô hiệu hóa script PlayerMove) <<< BỔ SUNG QUAN TRỌNG
-            PlayerMove playerMove = player.GetComponent<PlayerMove>();
-            if (playerMove != null)
-            {
-                playerMove.enabled = false;
-            }
-
-            // Dừng coroutine tại đây, ngăn không cho LoadScene được gọi.
-            isTransitioning = false;
-            yield break;
+            pauseManager.Resume();
+        }
+        else
+        {
+            Time.timeScale = 1f; // Dự phòng
         }
 
-        // GIỮ LOGIC CHUYỂN SCENE THÔNG THƯỜNG
+        if (requiresRedKey) playerMoveScript?.UseRedKey();
+        StartCoroutine(Transition(playerObject));
+    }
 
-        // Giữ lại Player khi chuyển Scene
+    public void GoToMainMenu()
+    {
+        // Về menu bằng hàm của PauseManager
+        if (pauseManager != null)
+        {
+            pauseManager.QuitToMenu();
+        }
+        else
+        {
+            Time.timeScale = 1f;
+            SceneManager.LoadScene("LevelSelectScreen");
+        }
+    }
+
+    // -----------------------------------------------------------
+    // COROUTINES
+    // -----------------------------------------------------------
+
+    private IEnumerator Transition(GameObject player)
+    {
         DontDestroyOnLoad(player);
-
-        // Tải Scene mới
         SceneManager.LoadScene(targetScene);
-
-        // Chờ 1 frame để Scene load xong
         yield return null;
 
-        // Tìm điểm spawn
         GameObject spawnPoint = GameObject.Find(targetSpawnPoint);
         if (spawnPoint != null)
         {
             player.transform.position = spawnPoint.transform.position;
         }
 
-        // Cho phép Player trở lại trạng thái bình thường
+        // Bật lại input Player (Cần thiết vì PlayerMove bị tắt thủ công)
+        if (playerMoveScript != null)
+        {
+            playerMoveScript.enabled = true;
+        }
+
         isTransitioning = false;
+    }
+
+    private IEnumerator FinalLevelStop(GameObject player, PlayerMove moveScript)
+    {
+        if (requiresRedKey) moveScript?.UseRedKey();
+
+        yield return new WaitForSeconds(0.5f);
+
+        // HIỂN THỊ MÀN HÌNH HOÀN THÀNH
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowWinScreen();
+        }
+
+        isTransitioning = false;
+        yield break;
     }
 }

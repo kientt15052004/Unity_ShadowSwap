@@ -205,7 +205,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
     public virtual bool IsBossType => false;
 
     // internal UI instance
-    private HealthBarUI healthBarInstance;
+    public HealthBarUI healthBarInstance;
 
     // small cooldown guard
     public float directionChangeCooldown = 0.4f;
@@ -670,7 +670,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
         return false;
     }
 
-    private void SetAnimatorBoolSafe(string paramName, bool value)
+    public void SetAnimatorBoolSafe(string paramName, bool value)
     {
         if (anim == null) return;
         if (HasAnimatorParameter(paramName))

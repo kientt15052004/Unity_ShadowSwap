@@ -15,7 +15,6 @@ GameObject:
   - component: {fileID: 347145237965831813}
   - component: {fileID: 5351342747858092957}
   - component: {fileID: 6619191245420371544}
-  - component: {fileID: -6020339093058830788}
   - component: {fileID: -1507331709960450308}
   m_Layer: 0
   m_Name: Golem3
@@ -264,6 +263,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0a626b790e3996347a5097e4c7f2218b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  detectionRange: 8
+  stopDistance: 0.9
+  baseDamage: 10
+  comboStep: 2
 --- !u!114 &6619191245420371544
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -295,7 +298,9 @@ MonoBehaviour:
   attackCooldown: 1
   maxHealth: 100
   invincibilityTime: 0.15
-  directionChangeCooldown: 0.4
+  healthBarPrefab: {fileID: 0}
+  uiRoot: {fileID: 0}
+  healthBarOffset: {x: 0, y: 1.2, z: 0}
   rb: {fileID: 0}
   anim: {fileID: 0}
   player: {fileID: 0}
@@ -304,18 +309,7 @@ MonoBehaviour:
   rightPoint: {x: 0, y: 0}
   targetPoint: {x: 0, y: 0}
   isFacingRight: 1
---- !u!114 &-6020339093058830788
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2345089933386716331}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8c1925edc1b04fd438db1f3bd0f7755e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  directionChangeCooldown: 0.4
 --- !u!114 &-1507331709960450308
 MonoBehaviour:
   m_ObjectHideFlags: 0
