@@ -168,12 +168,14 @@ public class PlayerMove : MonoBehaviour
         {
             isBusy = true;
             anim.SetTrigger("Attack1");
+            AudioManager.Instance?.PlayAttack();  
         }
         // Attack 2 (Đánh từ trên xuống) - Chỉ khi ở trên không
         else if (Input.GetKeyDown(KeyCode.K) && !grounded)
         {
             isBusy = true;
             anim.SetTrigger("Attack2");
+            AudioManager.Instance?.PlayAttack();  
         }
         // Block - Chỉ khi trên mặt đất
         else if (Input.GetKeyDown(KeyCode.L) && grounded)

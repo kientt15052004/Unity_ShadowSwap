@@ -16,6 +16,7 @@ public class AudioManager : MonoBehaviour
     public AudioClip landClip;
     public AudioClip hurtClip;
     public AudioClip healClip;
+    public AudioClip dieClip;
     public AudioClip shadowSummonClip;
     public AudioClip shadowDisappearClip;
     public AudioClip shadowSwapClip;
@@ -23,6 +24,11 @@ public class AudioManager : MonoBehaviour
     public AudioClip keyClip;
     public AudioClip unlockChestClip;
     public AudioClip unlockGateClip;
+    public AudioClip attackClip;
+    public AudioClip hitImpactClip;
+    public AudioClip monsterBiteClip;
+    public AudioClip monsterDieClip;
+
 
     public AudioClip[] footstepClips;
 
@@ -118,6 +124,7 @@ public class AudioManager : MonoBehaviour
     public void PlayLand() => PlaySFX(landClip);
     public void PlayHurt() => PlaySFX(hurtClip);
     public void PlayHeal() => PlaySFX(healClip);
+    public void PlayDie() => PlaySFX(dieClip);
     public void PlayShadowSummon() => PlaySFX(shadowSummonClip);
     public void PlayShadowDisappear() => PlaySFX(shadowDisappearClip);
     public void PlayShadowSwap() => PlaySFX(shadowSwapClip);
@@ -125,6 +132,10 @@ public class AudioManager : MonoBehaviour
     public void PlayKey() => PlaySFX(keyClip);
     public void PlayUnlockChest() => PlaySFX(unlockChestClip);
     public void PlayUnlockGate() => PlaySFX(unlockGateClip);
+    public void PlayAttack() => PlaySFX(attackClip);
+    public void PlayHitImpact() => PlaySFX(hitImpactClip);
+    public void PlayMonsterBite() => PlaySFX(monsterBiteClip);
+    public void PlayMonsterDie() => PlaySFX(monsterDieClip);
 
     // Thay đổi âm lượng runtime
     public void SetMusicVolume(float volume)
