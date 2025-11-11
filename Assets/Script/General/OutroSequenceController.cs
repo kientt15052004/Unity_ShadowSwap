@@ -17,7 +17,7 @@ public class OutroSequenceController : MonoBehaviour
 
     public Slide[] slides;
     public float fadeTime = 1f;
-    public float displayTime = 6f;
+    public float displayTime = 4f;
     public string nextSceneName = "StartScreen"; // đổi tên màn ở đây
 
     private bool _skipped = false;
