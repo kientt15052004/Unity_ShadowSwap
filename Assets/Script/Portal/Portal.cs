@@ -16,6 +16,9 @@ public class Portal : MonoBehaviour
     [Header("Đây có phải là Cổng Kết thúc Game?")]
     public bool isFinalLevel = false;
 
+    [Header("World mở khóa sau khi đi qua portal này")]
+    public int worldIndexToUnlock = 0;
+
     private bool isTransitioning = false;
     private GameObject playerObject;
     private PlayerMove playerMoveScript;
@@ -102,6 +105,13 @@ public class Portal : MonoBehaviour
         }
 
         if (requiresRedKey) playerMoveScript?.UseRedKey();
+        // === MỞ KHÓA MÀN CHƠI TIẾP THEO ===
+        if (worldIndexToUnlock > 0)
+        {
+            int currentUnlocked = PlayerPrefs.GetInt("WorldUnlocked", 1);
+            if (worldIndexToUnlock > currentUnlocked)
+                PlayerPrefs.SetInt("WorldUnlocked", worldIndexToUnlock);
+        }
         StartCoroutine(Transition(playerObject));
     }
 
