@@ -8,24 +8,28 @@ public class PlayerAttackController : MonoBehaviour
     // Sát thương cơ bản cho mỗi đòn đánh
 
     public float attackRadius = 1.0f; // Phạm vi quét hitbox
-    public int attackDamage = 15;     // Sát thương cơ bản cho Attack1/Attack2
+    public int attackDamage = 10;     // Sát thương cơ bản cho Attack1/Attack2
     public LayerMask enemyLayer;      // Layer chứa tất cả kẻ địch và các đối tượng có thể bị tấn công
     private float _lastAttackEventTime = -999f;
     // Bộ đệm để lưu trữ kết quả va chạm
     private Collider2D[] _hitResults = new Collider2D[10];
 
+    private float _lastHitTime = -1f;
+    [SerializeField] private float hitCooldown = 0.05f; // 50ms tránh double hit
+
     // Chức năng này được gọi bằng Animation Event tại frame hit
     // Nó quét Hitbox và gây sát thương lên kẻ địch.
     public void PerformHitCheck(int damageOverride = 0)
     {
+        if (Time.time < _lastHitTime + hitCooldown) return;
+        _lastHitTime = Time.time;
+
         Vector2 attackOrigin = transform.position;
         int hitCount = Physics2D.OverlapCircleNonAlloc(attackOrigin, attackRadius, _hitResults, enemyLayer);
-
         if (hitCount <= 0) return;
 
         int finalDamage = (damageOverride > 0) ? damageOverride : attackDamage;
 
-        // Dedupe: ensure we only damage each root GameObject once per attack
         HashSet<int> hitRoots = new HashSet<int>(hitCount);
 
         for (int i = 0; i < hitCount; i++)
@@ -33,25 +37,17 @@ public class PlayerAttackController : MonoBehaviour
             Collider2D hitCollider = _hitResults[i];
             if (hitCollider == null) continue;
 
-            // ignore yourself
             if (hitCollider.gameObject == gameObject) { _hitResults[i] = null; continue; }
 
-            // Prefer the GameObject that owns the Rigidbody2D (so child colliders map to same root)
             GameObject rootGO = hitCollider.attachedRigidbody != null ? hitCollider.attachedRigidbody.gameObject : hitCollider.gameObject;
             int id = rootGO.GetInstanceID();
-
-            // If we've already hit this root in this sweep, skip
             if (!hitRoots.Add(id))
             {
                 _hitResults[i] = null;
                 continue;
             }
 
-            // Try to find IDamageable on the root first, then children
-            IDamageable damageableTarget = rootGO.GetComponent<IDamageable>();
-            if (damageableTarget == null)
-                damageableTarget = rootGO.GetComponentInChildren<IDamageable>();
-
+            IDamageable damageableTarget = rootGO.GetComponent<IDamageable>() ?? rootGO.GetComponentInChildren<IDamageable>();
             if (damageableTarget != null)
             {
                 DamageInfo info = new DamageInfo(finalDamage, transform.position, gameObject, false);
@@ -60,7 +56,6 @@ public class PlayerAttackController : MonoBehaviour
             }
             else
             {
-                // fallback: maybe the root doesn't implement IDamageable, but child has HealthManager etc.
                 var hm = rootGO.GetComponentInChildren<HealthManager>();
                 if (hm != null)
                 {
@@ -68,8 +63,6 @@ public class PlayerAttackController : MonoBehaviour
                     Debug.Log($"Player hit (fallback) {rootGO.name} for {finalDamage} damage (HealthManager).");
                 }
             }
-
-            // Clear buffer slot
             _hitResults[i] = null;
         }
     }
