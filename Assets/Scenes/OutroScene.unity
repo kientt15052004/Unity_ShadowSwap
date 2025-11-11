@@ -825,8 +825,9 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Echo \u0111\u1EE9ng m\u1ED9t m\xECnh tr\xEAn \u0111\u1EC9nh th\xE1p, gi\xF3
-    th\u1ED5i tung t\xE0 \xE1o, nh\xECn theo h\u01B0\u1EDBng m\u1EB7t tr\u1EDDi m\u1ECDc."
+  m_text: "Echo \u0111\u1EE9ng m\u1ED9t m\xECnh tr\xEAn \u0111\u1EC9nh th\xE1p, nh\xECn
+    v\u1EC1 h\u01B0\u1EDBng m\u1EB7t tr\u1EDDi m\u1ECDc ngh\u0129 v\u1EC1 1 t\u01B0\u01A1ng
+    lai t\u01B0\u01A1i s\xE1ng."
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1259,7 +1260,7 @@ MonoBehaviour:
     text: {fileID: 353699333}
     skipFadeOut: 0
   fadeTime: 1
-  displayTime: 6
+  displayTime: 4
   nextSceneName: StartScreen
 --- !u!1 &1638939095
 GameObject:
@@ -1559,7 +1560,7 @@ MonoBehaviour:
       m_Calls: []
   m_text: "C\xF4ng ch\xFAa Lyra v\u1EDBi s\u1EE9c m\u1EA1nh v\xE0 tr\xE1i tim thu\u1EA7n
     khi\u1EBFt c\u1EE7a m\xECnh \u0111\xE3 \u0111em l\u1EA1i \xE1nh s\xE1ng v\u1EC1
-    v\u1EDBi v\u01B0\u01A1ng qu\u1ED1c c\u1EE7a c\xF4."
+    v\u1EDBi v\u01B0\u01A1ng qu\u1ED1c."
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
