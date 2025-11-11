@@ -31,6 +31,16 @@ public class PlayerMove : MonoBehaviour
     [SerializeField] private float hurtSoundInterval = 1f;
     private float hurtSoundTimer = 0f;
 
+    // SHADOW SKILL COOLDOWN
+    [Header("Shadow Skill Cooldown")]
+    [SerializeField] private float shadowCooldown = 10f;
+    private float shadowCooldownTimer = 0f;
+
+    [Header("Shadow Skill UI")]
+    [SerializeField] private Image shadowSkillIcon;
+    [SerializeField] private TextMeshProUGUI shadowCooldownText;
+
+
     // Item Prefabs
     [Header("Item Prefabs")]
     [SerializeField] private GameObject redKeyPrefab; // Prefab của Key Đỏ để Instantiate
@@ -94,13 +104,42 @@ public class PlayerMove : MonoBehaviour
             body.velocity = new Vector2(body.velocity.x, jumpHeight);
         }
 
-        // 3. XỬ LÝ SHADOW SWAP
-        if (Input.GetKeyDown(KeyCode.E))
+        // 3. XỬ LÝ SHADOW SWAP
+        // ======== SHADOW SKILL COOLDOWN ========
+        if (shadowCooldownTimer > 0f)
         {
-            if (shadowManager != null)
-                // Tạo bóng, truyền kèm localScale để lật đúng chiều
-                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
+            shadowCooldownTimer -= Time.deltaTime;
+
+            // UI hiển thị cooldown
+            if (shadowCooldownText != null)
+                shadowCooldownText.text = Mathf.Ceil(shadowCooldownTimer).ToString();
+
+            if (shadowSkillIcon != null)
+                shadowSkillIcon.color = new Color(1, 1, 1, 0.4f); // icon mờ khi đang hồi
         }
+        else
+        {
+            // UI khi hồi xong
+            if (shadowCooldownText != null)
+                shadowCooldownText.text = "";
+
+            if (shadowSkillIcon != null)
+                shadowSkillIcon.color = new Color(1, 1, 1, 1f); // icon sáng trở lại
+
+            // Chỉ cho dùng khi hồi xong
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                if (shadowManager != null)
+                {
+                    shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
+                    AudioManager.Instance?.PlayShadowSummon();
+                }
+
+                shadowCooldownTimer = shadowCooldown; // Bắt đầu hồi chiêu
+            }
+        }
+        // =======================================
+
 
         if (Input.GetKeyDown(KeyCode.Q))
         {
@@ -122,14 +161,7 @@ public class PlayerMove : MonoBehaviour
             AudioManager.Instance?.PlayJump();
         }
 
-        // 3. XỬ LÝ SHADOW SWAP
-        if (Input.GetKeyDown(KeyCode.E))
-        {
-            if (shadowManager != null)
-                // Tạo bóng, truyền kèm localScale để lật đúng chiều
-                shadowManager.CreateShadow(transform.position, transform.rotation, transform.localScale);
-            AudioManager.Instance?.PlayShadowSummon();
-        }
+      
 
         if (Input.GetKeyDown(KeyCode.Q))
         {
