@@ -9,6 +9,9 @@ EditorBuildSettings:
     path: Assets/Scenes/SampleScene.unity
     guid: 2cda990e2423bbf4892e6590ba056729
   - enabled: 1
+    path: Assets/Scenes/IntroScene.unity
+    guid: bf091a45d04afe94c849cc201952fb11
+  - enabled: 1
     path: Assets/Scenes/StartScreen.unity
     guid: 62117754c9ac21249a6b676ce5e3e4d9
   - enabled: 1
@@ -25,5 +28,8 @@ EditorBuildSettings:
     guid: a6e28fc71c46f7341a09c9884e319612
   - enabled: 1
     path: Assets/Scenes/Map8.unity
-    guid: 54df7161f6857f24da72a4276ee0519f
+    guid: 7cf1af7b1da2a404980012dac9d2236c
+  - enabled: 1
+    path: Assets/Scenes/OutroScene.unity
+    guid: 3ee2144e081fbc54f88269737986c8d7
   m_configObjects: {}
