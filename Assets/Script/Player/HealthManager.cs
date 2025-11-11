@@ -73,12 +73,12 @@ public class HealthManager : MonoBehaviour
     {
         if (isInvincible) return;
 
-        PlayerMove pm = GetComponent<PlayerMove>();
-        if (pm != null && pm.IsBlocking())
-        {
-            Debug.Log("Blocked damage!");
-            return; // Chặn sát thương
-        }
+        //PlayerMove pm = GetComponent<PlayerMove>();
+        //if (pm != null && pm.IsBlocking())
+        //{
+        //    Debug.Log("Blocked damage!");
+        //    return; // Chặn sát thương
+        //}
 
         currentHealth -= damage;
 
