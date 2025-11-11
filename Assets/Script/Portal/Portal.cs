@@ -37,8 +37,12 @@ public class Portal : MonoBehaviour
             // 1. KIỂM TRA CHÌA KHÓA
             if (requiresRedKey && playerMoveScript.keyRedCollected <= 0)
             {
-                Debug.Log("Cổng đã bị khóa! Cần Chìa khóa Đỏ.");
-                return;
+                // Cổng bị khóa, HIỂN THỊ CẢNH BÁO
+                if (UIManager.Instance != null)
+                {
+                    UIManager.Instance.ShowWarning("Cổng bị khóa! Cần Chìa khóa Đỏ.");
+                }
+                return; // Dừng lại
             }
 
             isTransitioning = true;
@@ -142,17 +146,28 @@ public class Portal : MonoBehaviour
 
     private IEnumerator FinalLevelStop(GameObject player, PlayerMove moveScript)
     {
+        // Nếu cổng cần chìa khóa, sử dụng chìa khóa
         if (requiresRedKey) moveScript?.UseRedKey();
 
+        // Chờ một chút để tạo hiệu ứng (tùy chọn)
         yield return new WaitForSeconds(0.5f);
 
-        // HIỂN THỊ MÀN HÌNH HOÀN THÀNH
-        if (UIManager.Instance != null)
+        // Đảm bảo Time.timeScale được reset trước khi load scene mới
+        Time.timeScale = 1f;
+
+        // Tải Scene kết thúc được định nghĩa trong Target Scene
+        if (!string.IsNullOrEmpty(targetScene))
         {
-            UIManager.Instance.ShowWinScreen();
+            // Chuyển scene trực tiếp
+            SceneManager.LoadScene(targetScene);
+        }
+        else
+        {
+            // Thông báo lỗi nếu Target Scene bị thiếu
+            Debug.LogError("LỖI CỔNG CUỐI: Cổng kết thúc (Is Final Level) thiếu Target Scene!");
         }
 
-        isTransitioning = false;
+        // Dừng coroutine
         yield break;
     }
 }

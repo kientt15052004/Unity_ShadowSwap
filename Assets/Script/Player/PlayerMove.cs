@@ -356,7 +356,11 @@ public class PlayerMove : MonoBehaviour
             }
             else
             {
-
+                // TRƯỜNG HỢP RƯƠNG BỊ KHÓA
+                if (UIManager.Instance != null)
+                {
+                    UIManager.Instance.ShowWarning("Rương bị khóa! Cần Chìa khóa Vàng."); // Cảnh báo
+                }
             }
         }
     }
