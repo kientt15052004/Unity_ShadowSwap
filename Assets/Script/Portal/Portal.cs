@@ -135,7 +135,6 @@ public class Portal : MonoBehaviour
 
     private IEnumerator Transition(GameObject player)
     {
-        DontDestroyOnLoad(player);
         SceneManager.LoadScene(targetScene);
         yield return null;
 
