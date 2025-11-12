@@ -126,7 +126,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   speed: 5
   jumpHeight: 8
-  attackCooldown: 0.5
   groundCheck: {fileID: 8402728824969713843}
   groundCheckRadius: 0.2
   groundLayer:
@@ -134,9 +133,6 @@ MonoBehaviour:
     m_Bits: 8
   footstepInterval: 0.3
   hurtSoundInterval: 1
-  shadowCooldown: 10
-  shadowSkillIcon: {fileID: 0}
-  shadowCooldownText: {fileID: 0}
   redKeyPrefab: {fileID: 0}
   keyRedCollected: 0
   scoreText: {fileID: 0}
@@ -160,7 +156,7 @@ Rigidbody2D:
   m_Mass: 1
   m_LinearDrag: 0
   m_AngularDrag: 0.05
-  m_GravityScale: 1.3
+  m_GravityScale: 1
   m_Material: {fileID: 6200000, guid: 4369a1e7e4e7bee428e34b20e7c57d95, type: 2}
   m_Interpolate: 0
   m_SleepingMode: 1

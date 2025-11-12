@@ -20,6 +20,7 @@ public class BossRoomTrigger : MonoBehaviour
     {
         if (activated) return;
         if (!collision.CompareTag("Player")) return;
+        AudioManager.Instance.PlayBossMusic();
 
         activated = true;
 
