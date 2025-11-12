@@ -7,7 +7,7 @@ public class HealthBarOverlay : MonoBehaviour
 
 
     public float barHeightOffset = 1.2f;
-    public float baseBarLength = 1.0f;   // Chiều dài chuẩn (cho quái 100 máu)
+    public float baseBarLength = 0.05f;   // Chiều dài chuẩn (cho quái 100 máu)
     public float barHeight = 0.15f;
 
 

@@ -6,7 +6,15 @@ public class BossRoomTrigger : MonoBehaviour
     public GameObject trapRight;
     public GameObject boss;
 
+    public GameObject bossHP_Panel; // <-- thêm cái này
+
     bool activated = false;
+
+    void Start()
+    {
+        if (bossHP_Panel != null)
+            bossHP_Panel.SetActive(false); // Ẩn panel máu khi chưa đánh
+    }
 
     void OnTriggerEnter2D(Collider2D collision)
     {
@@ -15,22 +23,25 @@ public class BossRoomTrigger : MonoBehaviour
 
         activated = true;
 
-        // Đóng cửa -> bật trap
         trapLeft.SetActive(true);
         trapRight.SetActive(true);
 
-        // Bật boss nếu ban đầu ẩn
         if (boss != null)
             boss.SetActive(true);
+
+        if (bossHP_Panel != null)
+            bossHP_Panel.SetActive(true); // ✅ Hiện thanh máu khi bắt đầu
     }
 
     void Update()
     {
-        // Boss bị phá hủy → mở cửa
-        if (activated && boss == null)
+        if (activated && boss == null) // Boss bị chết (destroy)
         {
             trapLeft.SetActive(false);
             trapRight.SetActive(false);
+
+            if (bossHP_Panel != null)
+                bossHP_Panel.SetActive(false); // ✅ Tắt thanh máu khi boss chết
         }
     }
 }

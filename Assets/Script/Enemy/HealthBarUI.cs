@@ -88,7 +88,7 @@ public class HealthBarUI : MonoBehaviour
             if (bgRT != null && bgRT.rect.width > 0f) maxBarWidth = bgRT.rect.width;
         }
 
-        transform.localScale = Vector3.one * 0.0085f;
+        transform.localScale = Vector3.one * 0.006f;
 
         UpdateTextUI();
 
@@ -139,17 +139,8 @@ public class HealthBarUI : MonoBehaviour
             transform.localPosition = localOffset;
             if (faceCamera && mainCamera != null) transform.rotation = mainCamera.transform.rotation;
 
-            if (_neutralizeParentScale && _parentTransformForScale != null)
-            {
-                Vector3 p = _parentTransformForScale.localScale;
-                Vector3 inv = new Vector3(
-                    Mathf.Abs(p.x) > 0.0001f ? 1f / p.x : 1f,
-                    Mathf.Abs(p.y) > 0.0001f ? 1f / p.y : 1f,
-                    Mathf.Abs(p.z) > 0.0001f ? 1f / p.z : 1f
-                );
-                transform.localScale = Vector3.Scale(inv, _initialLocalScale);
-            }
-            else transform.localScale = _initialLocalScale;
+            transform.localScale = Vector3.one * 0.006f;
+
 
             if (fillImage != null)
             {
