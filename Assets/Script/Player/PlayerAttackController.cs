@@ -56,13 +56,25 @@ public class PlayerAttackController : MonoBehaviour
             }
             else
             {
-                var hm = rootGO.GetComponentInChildren<HealthManager>();
-                if (hm != null)
+                // ✅ ƯU TIÊN: Nếu là Boss → trừ máu Boss
+                var boss = rootGO.GetComponentInParent<BossHealth>();
+                if (boss != null)
                 {
-                    hm.TakeDamage(finalDamage);
-                    Debug.Log($"Player hit (fallback) {rootGO.name} for {finalDamage} damage (HealthManager).");
+                    boss.TakeDamage(finalDamage);
+                    Debug.Log($"⚔ Player hit BOSS {rootGO.name} for {finalDamage} damage!");
+                }
+                else
+                {
+                    // ✅ Fallback cho quái nhỏ dùng HealthManager
+                    var hm = rootGO.GetComponentInChildren<HealthManager>();
+                    if (hm != null)
+                    {
+                        hm.TakeDamage(finalDamage);
+                        Debug.Log($"Player hit (enemy) {rootGO.name} for {finalDamage} damage.");
+                    }
                 }
             }
+
             _hitResults[i] = null;
         }
     }
