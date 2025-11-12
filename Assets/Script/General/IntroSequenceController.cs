@@ -14,7 +14,7 @@ public class IntroSequenceController : MonoBehaviour
     }
 
     public Slide[] slides;
-    public float fadeTime = 2f;
+    public float fadeTime = 1f;
     public float displayTime = 6f;
     public string nextSceneName = "StartScreen"; //đổi tên màn ở đây
 

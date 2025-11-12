@@ -270,6 +270,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a4151ad3b7b734e45bee661edf594f3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  detectionRange: 8
+  stopDistance: 0.9
+  fallbackDamage: 10
+  playerCloseSpeed: 3
+  playerFarSpeed: 5
 --- !u!114 &4533688207787171206
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -301,7 +306,9 @@ MonoBehaviour:
   attackCooldown: 1
   maxHealth: 100
   invincibilityTime: 0.15
-  directionChangeCooldown: 0.4
+  healthBarPrefab: {fileID: 0}
+  uiRoot: {fileID: 0}
+  healthBarOffset: {x: 0, y: 1.2, z: 0}
   rb: {fileID: 0}
   anim: {fileID: 0}
   player: {fileID: 0}
@@ -310,6 +317,9 @@ MonoBehaviour:
   rightPoint: {x: 0, y: 0}
   targetPoint: {x: 0, y: 0}
   isFacingRight: 1
+  lastAttackAt: -999
+  healthBarInstance: {fileID: 0}
+  directionChangeCooldown: 0.4
 --- !u!114 &-1238802263649407189
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -322,7 +332,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 31b35bfdf009c124c9b20c2ec8c3d436, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  barHeightOffset: 1.2
+  barHeightOffset: 1
   baseBarLength: 1
   barHeight: 0.15
   regularEnemyColor: {r: 1, g: 0, b: 0, a: 1}
