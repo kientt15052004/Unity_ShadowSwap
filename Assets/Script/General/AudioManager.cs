@@ -9,6 +9,7 @@ public class AudioManager : MonoBehaviour
     [Header("Music")]
     public AudioSource musicSource;
     public AudioClip backgroundMusic;
+    public AudioClip bossMusic;
 
     [Header("SFX")]
     public AudioSource sfxSource;
@@ -36,6 +37,9 @@ public class AudioManager : MonoBehaviour
     [Range(0f, 1f)] public float musicVolume = 0.5f;
     [Range(0f, 1f)] public float sfxVolume = 1f;
 
+    private Coroutine fadeCoroutine;
+    private Coroutine monsterBiteLoopCoroutine;
+    
     private void Awake()
     {
         if (Instance == null)
@@ -84,6 +88,47 @@ public class AudioManager : MonoBehaviour
         musicSource.loop = true;
         musicSource.volume = musicVolume;
         musicSource.Play();
+    }
+
+    public void PlayBossMusic(float fadeDuration = 1f)
+    {
+        if (bossMusic == null) return;
+        if (musicSource.clip == bossMusic) return;
+        if (fadeCoroutine != null) StopCoroutine(fadeCoroutine);
+        fadeCoroutine = StartCoroutine(FadeToNewMusic(bossMusic, fadeDuration));
+    }
+
+    public void PlayNormalMusic(float fadeDuration = 1f)
+    {
+        if (backgroundMusic == null) return;
+        if (musicSource.clip == backgroundMusic) return;
+        if (fadeCoroutine != null) StopCoroutine(fadeCoroutine);
+        fadeCoroutine = StartCoroutine(FadeToNewMusic(backgroundMusic, fadeDuration));
+    }
+
+    private IEnumerator FadeToNewMusic(AudioClip newClip, float duration)
+    {
+        float startVol = musicSource.volume;
+
+        // Giảm âm lượng dần
+        for (float t = 0; t < duration; t += Time.deltaTime)
+        {
+            musicSource.volume = Mathf.Lerp(startVol, 0f, t / duration);
+            yield return null;
+        }
+
+        // Đổi nhạc
+        musicSource.clip = newClip;
+        musicSource.Play();
+
+        // Tăng âm lượng trở lại
+        for (float t = 0; t < duration; t += Time.deltaTime)
+        {
+            musicSource.volume = Mathf.Lerp(0f, musicVolume, t / duration);
+            yield return null;
+        }
+
+        musicSource.volume = musicVolume;
     }
 
     // Dừng nhạc nền
@@ -136,7 +181,31 @@ public class AudioManager : MonoBehaviour
     public void PlayHitImpact() => PlaySFX(hitImpactClip);
     public void PlayMonsterBite() => PlaySFX(monsterBiteClip);
     public void PlayMonsterDie() => PlaySFX(monsterDieClip);
+    
+    public void PlayMonsterBiteLoop(float interval = 1f)
+    {
+        if (monsterBiteLoopCoroutine != null)
+            StopCoroutine(monsterBiteLoopCoroutine);
+        
+        monsterBiteLoopCoroutine = StartCoroutine(MonsterBiteLoopCoroutine(interval));
+    }
 
+    public void StopMonsterBiteLoop()
+    {
+        if (monsterBiteLoopCoroutine != null)
+        {
+            StopCoroutine(monsterBiteLoopCoroutine);
+            monsterBiteLoopCoroutine = null;
+        }
+    }
+    private IEnumerator MonsterBiteLoopCoroutine(float interval)
+    {
+        while (true)
+        {
+            PlayMonsterBite();
+            yield return new WaitForSeconds(interval);
+        }
+    }
     // Thay đổi âm lượng runtime
     public void SetMusicVolume(float volume)
     {

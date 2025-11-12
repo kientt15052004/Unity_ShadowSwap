@@ -535,6 +535,8 @@ public class EnemyCore : MonoBehaviour, IDamageable
         isAttacking = true;
         rb.velocity = new Vector2(0f, rb.velocity.y);
         SetAnimatorBoolSafe("IsAttacking", true);
+        AudioManager.Instance.PlayMonsterBiteLoop();
+
         // If you use animation events, they should call OnAttackHit() and EndAttack()
         // Optionally you can implement a coroutine fallback in subclass.
     }
@@ -542,8 +544,9 @@ public class EnemyCore : MonoBehaviour, IDamageable
     // Called from animation event at the hit frame
     public virtual void OnAttackHit()
     {
-        if (attackHitbox != null && attackData != null)
+        if (attackHitbox != null && attackData != null){
             attackHitbox.DoAttack(attackData, transform, isFacingRight);
+        }
     }
 
     // Called from animation event at the end of the attack animation
@@ -551,6 +554,7 @@ public class EnemyCore : MonoBehaviour, IDamageable
     {
         isAttacking = false;
         SetAnimatorBoolSafe("IsAttacking", false);
+        AudioManager.Instance.StopMonsterBiteLoop();
     }
 
     public void ReverseDirection()
@@ -605,10 +609,10 @@ public class EnemyCore : MonoBehaviour, IDamageable
         if (isDead) return;
         isHurt = true;
         Debug.Log($"[Enemy Health] {gameObject.name} took {info.amount} damage from {(info.source != null ? info.source.name : "unknown")}. Remaining: {currentHealth}/{maxHealth}");
-
         if (isAttacking)
         {
             isAttacking = false;
+            AudioManager.Instance.PlayHitImpact();
             SetAnimatorBoolSafe("IsAttacking", false);
         }
 
@@ -628,7 +632,9 @@ public class EnemyCore : MonoBehaviour, IDamageable
     {
         isDead = true;
         SetAnimatorBoolSafe("IsDead", true);
-
+        AudioManager.Instance.PlayMonsterDie();
+        AudioManager.Instance.PlayNormalMusic();
+        AudioManager.Instance.StopMonsterBiteLoop();
         // disable physics interaction but keep object alive so death animation and events can run
         rb.velocity = Vector2.zero;
         var c = GetComponent<Collider2D>();

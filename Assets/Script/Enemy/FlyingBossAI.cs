@@ -91,6 +91,8 @@ public class FlyingBossAI : MonoBehaviour
 
     void PlayAttack()
     {
+        
+        AudioManager.Instance.PlayMonsterBite();
         int atk = Random.Range(1, 3);
         anim.SetTrigger(atk == 1 ? "Attack1" : "Attack2");
     }

@@ -105,7 +105,7 @@ public class HealthManager : MonoBehaviour
         Debug.Log("Nhân vật đã chết!");
 
         StopContinuousDamage();
-
+        AudioManager.Instance.PlayDie();
         // Kích hoạt animation chết
         if (anim != null)
         {
