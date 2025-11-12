@@ -8,6 +8,9 @@ public class PlayerMove : MonoBehaviour
     // Cài đặt di chuyển và nhảy
     [SerializeField] private float speed = 5f;
     [SerializeField] private float jumpHeight = 7f;
+    // Thêm vào đầu class PlayerMove (phần khai báo biến):
+    [SerializeField] private float attackCooldown = 0.5f; // thời gian giữa 2 lần chém
+    private float attackTimer = 0f;
 
     private Rigidbody2D body;
     private Animator anim;
@@ -71,7 +74,7 @@ public class PlayerMove : MonoBehaviour
 
     public bool isBlocking = false;
 
-    private void Awake()
+    private void Awake()
     {
         body = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
@@ -98,24 +101,26 @@ public class PlayerMove : MonoBehaviour
         grounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
 
         horizontalInput = Input.GetAxis("Horizontal");
-
+        // Cập nhật timer cho attack cooldown
+        if (attackTimer > 0f)
+            attackTimer -= Time.deltaTime;
         // 2. XỬ LÝ NHẢY
         if (Input.GetKeyDown(KeyCode.Space) && grounded)
         {
             body.velocity = new Vector2(body.velocity.x, jumpHeight);
         }
 
-       
 
-   
 
-        // Phát âm thanh khi vừa chạm đất
-        if (!wasGrounded && grounded)
+
+
+        // Phát âm thanh khi vừa chạm đất
+        if (!wasGrounded && grounded)
         {
             AudioManager.Instance?.PlayLand();
         }
 
-      
+
 
         // 3. XỬ LÝ SHADOW SWAP
         // ======== SHADOW SKILL COOLDOWN ========
@@ -161,21 +166,24 @@ public class PlayerMove : MonoBehaviour
             AudioManager.Instance?.PlayShadowSwap();
         }
 
-        // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
+        // 8.XỬ LÝ TẤN CÔNG & PHÒNG THỦ
 
-        // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
-        if (Input.GetKeyDown(KeyCode.J) && grounded)
+        // Attack 1 (Đánh từ dưới lên) - Chỉ khi trên mặt đất
+        // Attack 1 (trên mặt đất)
+        if (Input.GetKeyDown(KeyCode.J) && grounded && attackTimer <= 0f)
         {
             isBusy = true;
             anim.SetTrigger("Attack1");
-            AudioManager.Instance?.PlayAttack();  
+            AudioManager.Instance?.PlayAttack();
+            attackTimer = attackCooldown; // bắt đầu hồi đòn
         }
-        // Attack 2 (Đánh từ trên xuống) - Chỉ khi ở trên không
-        else if (Input.GetKeyDown(KeyCode.K) && !grounded)
+        // Attack 2 (trên không)
+        else if (Input.GetKeyDown(KeyCode.K) && !grounded && attackTimer <= 0f)
         {
             isBusy = true;
             anim.SetTrigger("Attack2");
-            AudioManager.Instance?.PlayAttack();  
+            AudioManager.Instance?.PlayAttack();
+            attackTimer = attackCooldown;
         }
         // Block - Chỉ khi trên mặt đất
         else if (Input.GetKeyDown(KeyCode.L) && grounded)
