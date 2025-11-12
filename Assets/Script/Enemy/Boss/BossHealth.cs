@@ -1,40 +1,35 @@
-﻿using System;
-using UnityEngine;
+﻿using UnityEngine;
+using System;
 
 public class BossHealth : MonoBehaviour
 {
-    public int MaxHealth = 1000;
-    public int CurrentHealth { get; private set; }
+    public int maxHealth = 300;
+    public int currentHealth;
 
-    public event Action<int> OnHealthChanged;
-    public event Action OnHealthDied;
+    public Action<int, int> OnHealthChanged; // (current, max)
+    public Action OnDeath;
 
-    public bool IsDead => CurrentHealth <= 0;
-
-    private void Awake()
+    private void Start()
     {
-        CurrentHealth = MaxHealth;
+        currentHealth = maxHealth;
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
-    public void TakeDamage(int amount)
+    public void TakeDamage(int dmg)
     {
-        if (IsDead) return;
+        currentHealth -= dmg;
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
 
-        CurrentHealth -= amount;
-        CurrentHealth = Mathf.Max(CurrentHealth, 0);
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
-        OnHealthChanged?.Invoke(CurrentHealth);
-
-        if (CurrentHealth == 0)
-            OnHealthDied?.Invoke();
+        if (currentHealth <= 0)
+            Die();
     }
 
-    public void Heal(int amount)
+    void Die()
     {
-        if (IsDead) return;
-
-        CurrentHealth += amount;
-        CurrentHealth = Mathf.Min(CurrentHealth, MaxHealth);
-        OnHealthChanged?.Invoke(CurrentHealth);
+        OnDeath?.Invoke();
+        Debug.Log("Boss Dead");
+        Destroy(gameObject, 1.5f); // hoặc animation chết
     }
 }
