@@ -22,4 +22,17 @@ public class LevelSelectManager : MonoBehaviour
         // Đảm bảo tên Scene "StartScreen" trùng khớp với tên Scene gốc của bạn
         SceneManager.LoadScene("StartScreen");
     }
+    public void QuitGame()
+    {
+        // Thoát hoàn toàn trò chơi
+        Debug.Log("Thoát game...");
+
+        // Nếu đang chạy bản build (chạy thật), lệnh này sẽ thoát ứng dụng
+        Application.Quit();
+
+        // Nếu đang chạy trong Unity Editor, cần dừng Play mode (chỉ có tác dụng trong Editor)
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
+    }
 }
