@@ -5,253 +5,171 @@ using UnityEngine;
 [RequireComponent(typeof(EnemyCore))]
 public class MartinalHero : GolemAIBase
 {
+
+    [Header("Boss Stats")]
     public int baseDamage = 40;
-    public int comboStep = 2;
-    int comboBonus = 0;
+    public float moveSpeed = 6f;
+    public float attackRange = 2f;
+    public float chaseDistance = 10f;
+    public float stopDistance = 1.5f;
 
-    public int fallbackDamage = 10;
-    public float playerCloseSpeed = 3f;
-    public float playerFarSpeed = 5f;
-    bool playerSpeedReduced = false;
+    [Header("Health & UI")]
+    public BossHealth bossHealth;
+    public HealthBarUI healthBarUI;
 
-    protected override void Awake()
+    [Header("AI")]
+    public Transform player;
+
+    private bool isAttacking = false;
+
+    [Header("Animator")]
+    public Animator anim;
+    private int attackHash, deadHash, hurtHash, runHash;
+
+    private Rigidbody2D rb;
+
+    // Buff
+    private float tempDamageMultiplier = 0f;
+    private int tempExtraHP = 0;
+
+    // Events
+    public Action OnBossDamaged;
+    public Action OnBossDied;
+
+    // Thời gian giả định animation attack (nên khớp với clip)
+    public float attackDuration = 1f;
+
+    private void Awake()
     {
-        base.Awake();
-    }
+        if (bossHealth == null) bossHealth = GetComponent<BossHealth>();
 
-    protected override void OnExitAttackRange()
-    {
-        comboBonus = 0;
-        ApplyPlayerSpeed(false);
-    }
-
-    protected override void OnEnterAttackRange()
-    {
-        ApplyPlayerSpeed(true);
-    }
-
-    private void ApplyPlayerSpeed(bool inRange)
-    {
-        if (core == null || core.player == null) return;
-        if (core.player.gameObject.TryGetComponent<PlayerMove>(out PlayerMove pm))
+        if (bossHealth != null)
         {
-            if (inRange && !playerSpeedReduced)
-            {
-                pm.SetupMove(playerCloseSpeed, 5f);
-                playerSpeedReduced = true;
-            }
-            else if (!inRange && playerSpeedReduced)
-            {
-                pm.SetupMove(playerFarSpeed, 8f);
-                playerSpeedReduced = false;
-            }
+            bossHealth.OnHealthChanged += BossTookDamage;
+            bossHealth.OnHealthDied += BossDied;
         }
+
+        if (healthBarUI != null)
+            healthBarUI.Initialize(transform, bossHealth.MaxHealth, true);
+
+        if (player == null)
+        {
+            GameObject p = GameObject.FindWithTag("Player");
+            if (p != null) player = p.transform;
+        }
+
+        rb = GetComponent<Rigidbody2D>();
+
+        if (anim == null)
+            anim = GetComponent<Animator>();
+
+        attackHash = Animator.StringToHash("IsAttacking");
+        deadHash = Animator.StringToHash("IsDead");
+        hurtHash = Animator.StringToHash("IsHurt");
+        runHash = Animator.StringToHash("Run");
     }
 
-    public override void OnAttackHit()
+    private void Update()
     {
-        if (core == null || core.player == null) return;
+        if (player == null || bossHealth.IsDead) return;
 
-        var playerGO = core.player.gameObject;
-        var id = playerGO.GetComponent<IDamageable>();
+        FacePlayer();
+        float dist = Vector2.Distance(transform.position, player.position);
 
-        int totalDamage = baseDamage + comboBonus;
-
-        if (id == null)
+        // Nếu player trong tầm attack → dừng chạy và tấn công
+        if (!isAttacking && dist <= attackRange)
         {
-            var hm = playerGO.GetComponent<HealthManager>();
-            if (hm != null && core.IsAttacking)
-            {
-                hm.TakeDamage(totalDamage);
-                comboBonus += comboStep;
-            }
+            anim.SetBool(runHash, false);
+            StartCoroutine(PerformAttack());
+            return;
+        }
+
+        // Nếu player ngoài tầm attack nhưng trong tầm chase → chase
+        if (!isAttacking && dist > stopDistance && dist <= chaseDistance)
+        {
+            Vector2 dir = (player.position - transform.position).normalized;
+            rb.MovePosition(rb.position + dir * moveSpeed * Time.deltaTime);
+            anim.SetBool(runHash, true);
         }
         else
         {
-            // If IDamageable exists, assume base AttackHitbox does baseDamage.
-            // Apply only the combo bonus via IDamageable if desired:
-            if (core.IsAttacking && comboBonus > 0)
-            {
-                id.TakeDamage(new DamageInfo(comboBonus, core.transform.position, gameObject, false));
-                comboBonus += comboStep;
-            }
+            anim.SetBool(runHash, false);
         }
     }
 
-    public override void OnDamaged(DamageInfo info)
+    private void FacePlayer()
     {
-        base.OnDamaged(info);
-        comboBonus = 0;
+        if (player == null) return;
+        Vector3 euler = transform.eulerAngles;
+        euler.y = (player.position.x >= transform.position.x) ? 0f : 180f;
+        transform.eulerAngles = euler;
     }
 
-    public override void OnDied()
+    private IEnumerator PerformAttack()
     {
-        base.OnDied();
+        isAttacking = true;
+        anim.SetBool(attackHash, true);
+
+        // Đợi animation kết thúc (1s hoặc đúng clip length)
+        yield return new WaitForSeconds(attackDuration);
+
+        // Reset attack
+        anim.SetBool(attackHash, false);
+        isAttacking = false;
     }
-    //[Header("Boss Stats")]
-    //public int baseDamage = 40;
-    //public float moveSpeed = 6f;
-    //public float attackRange = 2f;
-    //public float chaseDistance = 10f;
-    //public float stopDistance = 1.5f;
 
-    //[Header("Health & UI")]
-    //public BossHealth bossHealth;
-    //public HealthBarUI healthBarUI;
+    // Animation Event
+    public void DealDamage()
+    {
+        if (player == null) return;
 
-    //[Header("AI")]
-    //public Transform player;
+        float dist = Vector2.Distance(transform.position, player.position);
+        if (dist <= attackRange)
+        {
+            int damage = GetDamage();
+            IDamageable dmg = player.GetComponent<IDamageable>() ?? player.GetComponentInChildren<IDamageable>();
+            dmg?.TakeDamage(new DamageInfo(damage, transform.position, gameObject, false));
+        }
+    }
 
-    //private bool isAttacking = false;
+    private void BossTookDamage(int currentHp)
+    {
+        OnBossDamaged?.Invoke();
+        healthBarUI?.UpdateHealth(currentHp);
+        anim.SetBool(hurtHash, true);
+    }
 
-    //[Header("Animator")]
-    //public Animator anim;
-    //private int attackHash, deadHash, hurtHash, runHash;
+    public void OnHurtAnimationEnd()
+    {
+        anim.SetBool(hurtHash, false);
+    }
 
-    //private Rigidbody2D rb;
+    private void BossDied()
+    {
+        OnBossDied?.Invoke();
+        StopAllCoroutines();
+        anim.SetBool(deadHash, true);
+        anim.SetBool(attackHash, false);
+        anim.SetBool(runHash, false);
+        rb.velocity = Vector2.zero;
+    }
 
-    //// Buff
-    //private float tempDamageMultiplier = 0f;
-    //private int tempExtraHP = 0;
+    public void ApplyTemporaryBuff(float damagePercent, int extraHP, float duration)
+    {
+        tempDamageMultiplier = damagePercent;
+        tempExtraHP = extraHP;
+        bossHealth.Heal(extraHP);
+        Invoke(nameof(RemoveTempBuff), duration);
+    }
 
-    //// Events
-    //public Action OnBossDamaged;
-    //public Action OnBossDied;
+    private void RemoveTempBuff()
+    {
+        tempDamageMultiplier = 0f;
+        tempExtraHP = 0;
+    }
 
-    //// Thời gian giả định animation attack (nên khớp với clip)
-    //public float attackDuration = 1f;
-
-    //private void Awake()
-    //{
-    //    if (bossHealth == null) bossHealth = GetComponent<BossHealth>();
-
-    //    if (bossHealth != null)
-    //    {
-    //        bossHealth.OnHealthChanged += BossTookDamage;
-    //        bossHealth.OnHealthDied += BossDied;
-    //    }
-
-    //    if (healthBarUI != null)
-    //        healthBarUI.Initialize(transform, bossHealth.MaxHealth, true);
-
-    //    if (player == null)
-    //    {
-    //        GameObject p = GameObject.FindWithTag("Player");
-    //        if (p != null) player = p.transform;
-    //    }
-
-    //    rb = GetComponent<Rigidbody2D>();
-
-    //    if (anim == null)
-    //        anim = GetComponent<Animator>();
-
-    //    attackHash = Animator.StringToHash("IsAttacking");
-    //    deadHash = Animator.StringToHash("IsDead");
-    //    hurtHash = Animator.StringToHash("IsHurt");
-    //    runHash = Animator.StringToHash("Run");
-    //}
-
-    //private void Update()
-    //{
-    //    if (player == null || bossHealth.IsDead) return;
-
-    //    FacePlayer();
-    //    float dist = Vector2.Distance(transform.position, player.position);
-
-    //    // Nếu player trong tầm attack → dừng chạy và tấn công
-    //    if (!isAttacking && dist <= attackRange)
-    //    {
-    //        anim.SetBool(runHash, false);
-    //        StartCoroutine(PerformAttack());
-    //        return;
-    //    }
-
-    //    // Nếu player ngoài tầm attack nhưng trong tầm chase → chase
-    //    if (!isAttacking && dist > stopDistance && dist <= chaseDistance)
-    //    {
-    //        Vector2 dir = (player.position - transform.position).normalized;
-    //        rb.MovePosition(rb.position + dir * moveSpeed * Time.deltaTime);
-    //        anim.SetBool(runHash, true);
-    //    }
-    //    else
-    //    {
-    //        anim.SetBool(runHash, false);
-    //    }
-    //}
-
-    //private void FacePlayer()
-    //{
-    //    if (player == null) return;
-    //    Vector3 euler = transform.eulerAngles;
-    //    euler.y = (player.position.x >= transform.position.x) ? 0f : 180f;
-    //    transform.eulerAngles = euler;
-    //}
-
-    //private IEnumerator PerformAttack()
-    //{
-    //    isAttacking = true;
-    //    anim.SetBool(attackHash, true);
-
-    //    // Đợi animation kết thúc (1s hoặc đúng clip length)
-    //    yield return new WaitForSeconds(attackDuration);
-
-    //    // Reset attack
-    //    anim.SetBool(attackHash, false);
-    //    isAttacking = false;
-    //}
-
-    //// Animation Event
-    //public void DealDamage()
-    //{
-    //    if (player == null) return;
-
-    //    float dist = Vector2.Distance(transform.position, player.position);
-    //    if (dist <= attackRange)
-    //    {
-    //        int damage = GetDamage();
-    //        IDamageable dmg = player.GetComponent<IDamageable>() ?? player.GetComponentInChildren<IDamageable>();
-    //        dmg?.TakeDamage(new DamageInfo(damage, transform.position, gameObject, false));
-    //    }
-    //}
-
-    //private void BossTookDamage(int currentHp)
-    //{
-    //    OnBossDamaged?.Invoke();
-    //    healthBarUI?.UpdateHealth(currentHp);
-    //    anim.SetBool(hurtHash, true);
-    //}
-
-    //public void OnHurtAnimationEnd()
-    //{
-    //    anim.SetBool(hurtHash, false);
-    //}
-
-    //private void BossDied()
-    //{
-    //    OnBossDied?.Invoke();
-    //    StopAllCoroutines();
-    //    anim.SetBool(deadHash, true);
-    //    anim.SetBool(attackHash, false);
-    //    anim.SetBool(runHash, false);
-    //    rb.velocity = Vector2.zero;
-    //}
-
-    //public void ApplyTemporaryBuff(float damagePercent, int extraHP, float duration)
-    //{
-    //    tempDamageMultiplier = damagePercent;
-    //    tempExtraHP = extraHP;
-    //    bossHealth.Heal(extraHP);
-    //    Invoke(nameof(RemoveTempBuff), duration);
-    //}
-
-    //private void RemoveTempBuff()
-    //{
-    //    tempDamageMultiplier = 0f;
-    //    tempExtraHP = 0;
-    //}
-
-    //public int GetDamage()
-    //{
-    //    return Mathf.RoundToInt(baseDamage * (1f + tempDamageMultiplier));
-    //}
+    public int GetDamage()
+    {
+        return Mathf.RoundToInt(baseDamage * (1f + tempDamageMultiplier));
+    }
 }
